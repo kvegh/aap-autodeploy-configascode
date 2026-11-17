@@ -1,0 +1,43 @@
+---
+# firewalld: public interface, web ports, managed SSH port from the management
+# networks only.
+#
+# Port 22 (the ssh service) stays open here on purpose. The SSH stage closes it
+# after it has proven login on the managed port; closing it earlier would cut
+# new connections before sshd moves.
+#
+# The role adds the listed rules; it does not remove rules dropped from this
+# list. Handling removals in CaC is a separate project to-do.
+#
+# Required variables:
+#   host_public_interface     vault: public network interface name
+#   host_ssh_port             vault: managed SSH port
+#   host_management_sources   vault: list of IPv4 networks allowed to reach SSH
+
+- name: Configure the firewall
+  hosts: autodeploy_target
+  become: true
+  tasks:
+    - name: Configure firewalld
+      ansible.builtin.include_role:
+        name: redhat.rhel_system_roles.firewall
+      vars:
+        firewall:
+          - zone: public
+            interface: "{{ host_public_interface }}"
+            state: enabled
+            permanent: true
+            runtime: true
+          - zone: public
+            service: [http, https]
+            state: enabled
+            permanent: true
+            runtime: true
+          - zone: public
+            rich_rule: >-
+              {{ host_management_sources | map('regex_replace', '^(.*)$',
+              'rule family="ipv4" source address="\1" port port="' ~ host_ssh_port ~ '" protocol="tcp" accept')
+              | list }}
+            state: enabled
+            permanent: true
+            runtime: true

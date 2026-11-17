@@ -1,0 +1,16 @@
+# Managed by aap-autodeploy-configascode
+#
+# Catch-all for anything that reaches the public IP without a server_name we
+# recognise -- scanners hitting the public address directly, stale DNS, etc.
+# ssl_reject_handshake means we do not even present a certificate to them.
+server {
+    listen 443 ssl default_server;
+    server_name _;
+    ssl_reject_handshake on;
+}
+
+server {
+    listen 80 default_server;
+    server_name _;
+    return 444;
+}

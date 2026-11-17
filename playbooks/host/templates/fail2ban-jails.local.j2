@@ -1,0 +1,8 @@
+# Managed by aap-autodeploy-configascode
+{% for jail, settings in host_fail2ban_jails.items() %}
+
+[{{ jail }}]
+{% for key, value in settings.items() %}
+{{ key }} = {{ value }}
+{% endfor %}
+{% endfor %}

@@ -1,0 +1,66 @@
+---
+# VM image directories and their libvirt storage pools.
+#
+# The directories get the virt_image_t SELinux label directly; on a fresh host
+# they are empty, so no relabelling is needed. community.libvirt.virt_pool
+# takes one action per call, so define, start and autostart are three tasks.
+# An existing pool is never redefined.
+#
+# Required variable:
+#   host_storage_pools   list of {name, path, owner, group, mode},
+#                        e.g. {name: vms, path: /opt/vms, owner: root, group: qemu, mode: "0755"}
+
+- name: Configure VM storage
+  hosts: autodeploy_target
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Record the SELinux label rule for the image directories
+      community.general.sefcontext:
+        target: "{{ item.path }}(/.*)?"
+        setype: virt_image_t
+        state: present
+      loop: "{{ host_storage_pools }}"
+      loop_control:
+        label: "{{ item.path }}"
+
+    - name: Create the image directories with their label
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+        setype: virt_image_t
+      loop: "{{ host_storage_pools }}"
+      loop_control:
+        label: "{{ item.path }}"
+
+    - name: Define the storage pools
+      community.libvirt.virt_pool:
+        name: "{{ item.name }}"
+        state: present
+        xml: |
+          <pool type='dir'>
+            <name>{{ item.name }}</name>
+            <target><path>{{ item.path }}</path></target>
+          </pool>
+      loop: "{{ host_storage_pools }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Start the storage pools
+      community.libvirt.virt_pool:
+        name: "{{ item.name }}"
+        state: active
+      loop: "{{ host_storage_pools }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Start the storage pools at boot
+      community.libvirt.virt_pool:
+        name: "{{ item.name }}"
+        autostart: true
+      loop: "{{ host_storage_pools }}"
+      loop_control:
+        label: "{{ item.name }}"

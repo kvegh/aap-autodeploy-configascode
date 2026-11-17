@@ -1,0 +1,69 @@
+---
+# SSH hardening and the move from port 22 to the managed port, without locking
+# ourselves out.
+#
+# sshd first listens on both 22 and the managed port. The run then switches to
+# the managed port and proves login plus sudo. Only after that proof does sshd
+# drop port 22 and the firewall close it. If the proof fails, port 22 still
+# works and the host can be fixed without a reinstall.
+#
+# The managed port is private and comes from the vault. It applies to this
+# hypervisor only; the VMs keep SSH on port 22.
+#
+# Required variables (vault):
+#   host_ssh_port          managed SSH port
+#   host_ssh_allow_users   accounts allowed to log in
+
+- name: Harden SSH and move it to the managed port
+  hosts: autodeploy_target
+  become: true
+  vars:
+    host_sshd_settings:
+      PermitRootLogin: "no"
+      PasswordAuthentication: "no"
+      KbdInteractiveAuthentication: "no"
+      PubkeyAuthentication: "yes"
+      AllowUsers: "{{ host_ssh_allow_users | join(' ') }}"
+  tasks:
+    # sshd_manage_selinux labels the managed port as ssh_port_t, so sshd can
+    # bind it. The firewall stage has already opened it for the management
+    # networks.
+    - name: Listen on port 22 and the managed port
+      ansible.builtin.include_role:
+        name: redhat.rhel_system_roles.sshd
+      vars:
+        sshd_config_file: /etc/ssh/sshd_config.d/10-hypervisor.conf
+        sshd_manage_selinux: true
+        sshd_config: "{{ host_sshd_settings | combine({'Port': [22, host_ssh_port | int]}) }}"
+
+    - name: Apply the dual-port configuration now
+      ansible.builtin.meta: flush_handlers
+
+    - name: Switch this run to the managed port
+      ansible.builtin.set_fact:
+        ansible_port: "{{ host_ssh_port | int }}"
+
+    - name: Reconnect on the managed port
+      ansible.builtin.meta: reset_connection
+
+    - name: Prove login and sudo on the managed port
+      ansible.builtin.ping:
+
+    - name: Listen on the managed port only
+      ansible.builtin.include_role:
+        name: redhat.rhel_system_roles.sshd
+      vars:
+        sshd_config_file: /etc/ssh/sshd_config.d/10-hypervisor.conf
+        sshd_manage_selinux: true
+        sshd_config: "{{ host_sshd_settings | combine({'Port': host_ssh_port | int}) }}"
+
+    - name: Apply the final SSH configuration now
+      ansible.builtin.meta: flush_handlers
+
+    - name: Close port 22 in the firewall
+      ansible.posix.firewalld:
+        service: ssh
+        zone: public
+        state: disabled
+        permanent: true
+        immediate: true

@@ -1,0 +1,46 @@
+---
+# Disk write limits and memory page sharing (KSM) for the VMs.
+#
+# The byte-based write limits come from an incident on 2026-10-29: a
+# four-minute writeback backlog on the slow RAID1 SSDs froze all VMs.
+#
+# KSM is set through a tmpfiles.d file on purpose (decided 2026-11-17), not
+# through the certified kernel_settings role. That role works through TuneD,
+# whose virtualization profiles set the write limits as percentages, which
+# would silently replace the byte values above. tmpfiles.d writes the three
+# KSM values at every boot without TuneD.
+
+- name: Tune the hypervisor
+  hosts: autodeploy_target
+  become: true
+  gather_facts: false
+  handlers:
+    - name: Apply the KSM settings now
+      ansible.builtin.command:
+        argv: [systemd-tmpfiles, --create, /etc/tmpfiles.d/ksm.conf]
+      changed_when: true
+  tasks:
+    - name: Limit unwritten data and swapping
+      ansible.posix.sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        sysctl_file: /etc/sysctl.d/90-hypervisor-vm.conf
+        sysctl_set: true
+        reload: true
+      loop:
+        - {name: vm.dirty_background_bytes, value: "67108864"}
+        - {name: vm.dirty_bytes, value: "268435456"}
+        - {name: vm.swappiness, value: "10"}
+
+    - name: Share identical memory pages between VMs
+      ansible.builtin.copy:
+        dest: /etc/tmpfiles.d/ksm.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Managed by aap-autodeploy-configascode
+          w /sys/kernel/mm/ksm/run - - - - 1
+          w /sys/kernel/mm/ksm/pages_to_scan - - - - 1000
+          w /sys/kernel/mm/ksm/sleep_millisecs - - - - 100
+      notify: Apply the KSM settings now

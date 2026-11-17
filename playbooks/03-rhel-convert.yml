@@ -20,6 +20,9 @@
 # A host that already runs RHEL ends the play at the start, so a rerun after a
 # completed conversion changes nothing.
 
+- name: Choose the SSH port and user
+  ansible.builtin.import_playbook: host-connect.yml
+
 - name: Convert Rocky Linux 9 to RHEL 9
   hosts: autodeploy_target
   become: true

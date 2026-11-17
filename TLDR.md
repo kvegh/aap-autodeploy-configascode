@@ -6,7 +6,7 @@ and dropping the rest. See [README.md](README.md) for the full picture.
 
 ## What exists today
 
-Five stages:
+Six stages:
 
 - `playbooks/00-provider-reinstall.yml`, thirteen tasks, reinstalls a confirmed
   dedicated server with Rocky Linux 9.
@@ -20,6 +20,9 @@ Five stages:
   RHEL 9 with `convert2rhel` and proves a Red Hat kernel runs.
 - `playbooks/04-rhel-update.yml`, two tasks, updates all packages and reboots
   if anything changed.
+- `playbooks/05-host-setup.yml`, 53 tasks in ten stages, configures the
+  hypervisor: base, virtualization, SELinux, storage, networks, users,
+  firewall, SSH, web edge and tuning.
 
 ## Before you run it
 
@@ -38,5 +41,6 @@ Five stages:
 ## State of verification
 
 Strict lint and syntax check pass, also inside the AAP execution environment on
-ansible-core 2.20.10. No stage has run for real; only the reinstall stage has an AAP job
-template. The previous implementation remains the working one.
+ansible-core 2.20.10. Only the deployment version stage has run for real, through
+its AAP job template; the reinstall stage has a job template but has not run.
+The previous implementation remains the working one.

@@ -1,0 +1,23 @@
+---
+# SELinux mode and booleans.
+#
+# Permissive on purpose: this is a demo environment (decided 2026-11-17). The
+# booleans and directory labels are still set, so switching to enforcing later
+# only means changing host_selinux_state. The SSH port label is set by the SSH
+# stage, where the port is configured.
+
+- name: Configure SELinux
+  hosts: autodeploy_target
+  become: true
+  tasks:
+    - name: Set the SELinux mode and booleans
+      ansible.builtin.include_role:
+        name: redhat.rhel_system_roles.selinux
+      vars:
+        selinux_policy: targeted
+        selinux_state: "{{ host_selinux_state | default('permissive') }}"
+        selinux_booleans:
+          # nginx forwards requests to the VMs behind it
+          - {name: httpd_can_network_connect, state: true, persistent: true}
+          # VMs may use USB devices passed through from the host
+          - {name: virt_use_usb, state: true, persistent: true}

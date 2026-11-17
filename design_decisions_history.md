@@ -1,5 +1,38 @@
 # Design decisions history
 
+## Host setup in ten native stages — 2026-11-17
+
+Decided with the user on 17 November 2026, stage by stage, and built as
+`playbooks/05-host-setup.yml` importing `playbooks/host/01-base.yml` to
+`10-tuning.yml`, 53 tasks and 6 handlers instead of about 368 tasks.
+
+- Dropped: the replacement safeguards stage (its data became variables), every
+  repeated profile, target and empty-host proof, the old rclone stage (rclone
+  moves to the image download), CodeReady Builder (no package needs it),
+  the outbound production block, the production-only half of nginx,
+  `python3-certbot-nginx`, rsync and zstd, the timesync role (RHEL default) and
+  host-side Python for libvirt networks.
+- Base: EPEL, short hostname `<label>-vXY`, `/etc/hosts`, timezone, SELinux
+  tools, admin tools (the user is their use case), sysstat, smartd and
+  rasdaemon. The rasdaemon start is serialized with a drop-in because RHEL 9
+  still ships 0.6.7 with the start race of upstream issue 74, which was seen on
+  the rebuilt host.
+- SELinux stays permissive (demo environment). Storage pools and the internal
+  libvirt network come from plain variables and templates; the Windows network
+  and NTFS packages move to the Windows use case; internal DNS names carry no
+  version.
+- Users: the run switches to the admin user and proves login and sudo before
+  SSH is hardened. SSH: sshd first listens on 22 and the managed port, the run
+  proves login and sudo on the managed port, then 22 is removed and closed.
+  The managed port is private and comes from the vault. `host-connect.yml`
+  chooses port and user per run, so nothing passes between workflow nodes.
+- Web edge: nginx base, certbot and fail2ban in one playbook; use cases bring
+  their own vhosts and jails. One shared public Diffie-Hellman file.
+- Tuning: byte-based write limits (2026-10-29 incident) and KSM through
+  tmpfiles.d, not TuneD, so nothing can override the write limits.
+- Firewall rules removed from CaC are not removed from hosts yet; handling
+  removals is a separate to-do.
+
 ## RHEL update in two tasks, as its own playbook — 2026-11-17
 
 Decided with the user on 17 November 2026. The update stage updates all

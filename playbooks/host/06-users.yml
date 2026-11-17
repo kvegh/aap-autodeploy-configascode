@@ -1,0 +1,70 @@
+---
+# Users, SSH keys and sudo, then prove the admin login before SSH hardening.
+#
+# The SSH stage later turns off root login and moves the port. If the admin
+# login did not work by then, the host would be unreachable. So this stage
+# switches the run to the admin user and proves login plus sudo while root
+# still works. The admin account accepts the same SSH key as the bootstrap
+# root login, so one machine credential covers both.
+#
+# Required variables (vault):
+#   host_users             list of {name, uid, gid (optional), groups}; admins include wheel
+#   host_authorized_keys   dict: user name -> list of public keys
+#   host_admin_user        the account later runs use
+
+- name: Configure users and prove the admin login
+  hosts: autodeploy_target
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Create the groups with fixed IDs
+      ansible.builtin.group:
+        name: "{{ item.name }}"
+        gid: "{{ item.gid | default(item.uid) }}"
+        state: present
+      loop: "{{ host_users }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Create the users with fixed IDs and exact groups
+      ansible.builtin.user:
+        name: "{{ item.name }}"
+        uid: "{{ item.uid }}"
+        group: "{{ item.name }}"
+        groups: "{{ item.groups | default([]) }}"
+        append: false
+        state: present
+      loop: "{{ host_users }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Allow exactly the declared SSH keys
+      ansible.posix.authorized_key:
+        user: "{{ item.name }}"
+        key: "{{ host_authorized_keys[item.name] | join('\n') }}"
+        exclusive: true
+        state: present
+      loop: "{{ host_users }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Allow passwordless sudo for wheel
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/wheel-nopasswd
+        owner: root
+        group: root
+        mode: "0440"
+        content: |
+          # Managed by aap-autodeploy-configascode
+          %wheel ALL=(ALL) NOPASSWD: ALL
+        validate: /usr/sbin/visudo -cf %s
+
+    - name: Switch this run to the admin user
+      ansible.builtin.set_fact:
+        ansible_user: "{{ host_admin_user }}"
+
+    - name: Reconnect as the admin user
+      ansible.builtin.meta: reset_connection
+
+    - name: Prove the admin login and sudo
+      ansible.builtin.ping:

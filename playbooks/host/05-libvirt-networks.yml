@@ -1,0 +1,54 @@
+---
+# libvirt networks for the VMs.
+#
+# The package-created "default" network is stopped and not autostarted, so it
+# releases its bridge and subnet. The internal network is defined from its
+# template. The Windows network belongs to the Windows use case.
+#
+# community.libvirt.virt_net never redefines an existing network. On a fresh
+# host that does not matter. Changing a network later means removing and
+# defining it again with the VMs stopped.
+#
+# Required variables:
+#   host_libvirt_networks   list of {name, autostart, active, template}, where
+#                           template is true when templates/net-<name>.xml.j2 exists
+#   net_internal            vault: bridge, mac, domain, address, netmask,
+#                           dhcp_start, dhcp_end, reservations, dns_hosts, uuid (optional)
+
+- name: Configure the libvirt networks
+  hosts: autodeploy_target
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Stop networks that must stay inactive
+      community.libvirt.virt_net:
+        name: "{{ item.name }}"
+        state: inactive
+      loop: "{{ host_libvirt_networks | rejectattr('active') | list }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Define the networks from their templates
+      community.libvirt.virt_net:
+        name: "{{ item.name }}"
+        state: present
+        xml: "{{ lookup('ansible.builtin.template', 'templates/net-' ~ item.name ~ '.xml.j2') }}"
+      loop: "{{ host_libvirt_networks | selectattr('template') | list }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Set network autostart
+      community.libvirt.virt_net:
+        name: "{{ item.name }}"
+        autostart: "{{ item.autostart }}"
+      loop: "{{ host_libvirt_networks }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Start networks that must be active
+      community.libvirt.virt_net:
+        name: "{{ item.name }}"
+        state: active
+      loop: "{{ host_libvirt_networks | selectattr('active') | list }}"
+      loop_control:
+        label: "{{ item.name }}"

@@ -9,6 +9,9 @@
 # Required inventory: the host in group autodeploy_target, reachable over SSH
 # as a user with sudo, registered to Red Hat repositories.
 
+- name: Choose the SSH port and user
+  ansible.builtin.import_playbook: host-connect.yml
+
 - name: Update RHEL to the latest packages
   hosts: autodeploy_target
   become: true

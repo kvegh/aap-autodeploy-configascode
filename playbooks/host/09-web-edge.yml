@@ -1,0 +1,155 @@
+---
+# The internet-facing part of the hypervisor: nginx as the front door,
+# certbot for its certificates, fail2ban to ban abusers.
+#
+# Base only. Every use case brings its own nginx vhost (conf.d), certificate
+# and, if it needs one, its own fail2ban jail (jail.d). Use case vhosts
+# reference the shared /etc/letsencrypt/ssl-dhparams.pem and must not include
+# certbot's options-ssl-nginx.conf, which is not installed.
+#
+# Required variables:
+#   host_nginx_htpasswd       vault: content of the shared basic-auth file
+#   nginx_rate_limit_zone     name of the login rate limit zone, e.g. aap_login
+#   nginx_rate_limit_rate     e.g. 6r/m
+#   host_ssh_port             vault: managed SSH port, for the sshd jail
+#
+# The fail2ban jails are defined below; they hold nothing secret.
+
+- name: Configure the web edge
+  hosts: autodeploy_target
+  become: true
+  gather_facts: false
+  vars:
+    host_fail2ban_jails:
+      DEFAULT:
+        bantime: 1h
+        findtime: 10m
+        banaction: firewallcmd-rich-rules
+      sshd:
+        enabled: "true"
+        port: "{{ host_ssh_port }}"
+        maxretry: 4
+      nginx-http-auth:
+        enabled: "true"
+        logpath: /var/log/nginx/error.log
+        maxretry: 5
+      nginx-botsearch:
+        enabled: "true"
+        logpath: /var/log/nginx/access.log
+        maxretry: 2
+      # Bans clients that nginx answers with 444: requests for unknown names,
+      # typically scanners hitting the address directly.
+      nginx-444:
+        enabled: "true"
+        logpath: /var/log/nginx/access.log
+        maxretry: 2
+  handlers:
+    - name: Check the nginx configuration
+      ansible.builtin.command:
+        argv: [nginx, -t]
+      changed_when: false
+      notify: Reload nginx
+
+    - name: Reload nginx
+      ansible.builtin.systemd_service:
+        name: nginx
+        state: reloaded
+
+    # Handlers run in the order listed here, so the test runs before the
+    # reload; if it fails, the reload does not happen. No module validates
+    # fail2ban configuration, so its own test is the check.
+    - name: Test the fail2ban configuration
+      ansible.builtin.command:
+        argv: [fail2ban-client, -t]
+      changed_when: false
+
+    - name: Reload fail2ban
+      ansible.builtin.systemd_service:
+        name: fail2ban
+        state: reloaded
+  tasks:
+    - name: Install nginx, certbot and fail2ban
+      ansible.builtin.dnf:
+        name: [nginx, certbot, fail2ban]
+        state: present
+
+    - name: Render the nginx base configuration
+      ansible.builtin.template:
+        src: "templates/{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop:
+        - {src: nginx.conf.j2, dest: /etc/nginx/nginx.conf}
+        - {src: limits.conf.j2, dest: /etc/nginx/conf.d/limits.conf}
+        - {src: 00-default.conf.j2, dest: /etc/nginx/conf.d/00-default.conf}
+      notify: Check the nginx configuration
+
+    - name: Install the shared basic-auth file
+      ansible.builtin.copy:
+        dest: /etc/nginx/.htpasswd
+        content: "{{ host_nginx_htpasswd }}"
+        owner: root
+        group: nginx
+        mode: "0640"
+      no_log: true
+      notify: Check the nginx configuration
+
+    # One public file for all vhosts: the standard RFC 7919 ffdhe2048 group.
+    # It holds no secret; each vhost keeps its own certificate and key.
+    - name: Install the shared Diffie-Hellman parameters
+      ansible.builtin.copy:
+        src: files/ssl-dhparams.pem
+        dest: /etc/letsencrypt/ssl-dhparams.pem
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Create the Let's Encrypt challenge directory
+      ansible.builtin.file:
+        path: /var/lib/letsencrypt/.well-known/acme-challenge
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Start nginx at boot
+      ansible.builtin.systemd_service:
+        name: nginx
+        enabled: true
+        state: started
+
+    - name: Renew certificates automatically
+      ansible.builtin.systemd_service:
+        name: certbot-renew.timer
+        enabled: true
+        state: started
+
+    - name: Install the fail2ban filter for nginx 444 answers
+      ansible.builtin.copy:
+        src: files/nginx-444.conf
+        dest: /etc/fail2ban/filter.d/nginx-444.conf
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Test the fail2ban configuration
+        - Reload fail2ban
+
+    - name: Install the fail2ban jails
+      ansible.builtin.template:
+        src: templates/fail2ban-jails.local.j2
+        dest: /etc/fail2ban/jail.d/hypervisor.local
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Test the fail2ban configuration
+        - Reload fail2ban
+
+    - name: Start fail2ban at boot
+      ansible.builtin.systemd_service:
+        name: fail2ban
+        enabled: true
+        state: started

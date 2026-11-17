@@ -1,0 +1,34 @@
+<network>
+  <!-- Managed by aap-autodeploy-configascode -->
+  <name>internal</name>
+{% if net_internal.uuid is defined %}
+  <uuid>{{ net_internal.uuid }}</uuid>
+{% endif %}
+  <forward mode='nat'>
+    <nat>
+      <port start='1024' end='65535'/>
+    </nat>
+  </forward>
+  <bridge name='{{ net_internal.bridge }}' stp='on' delay='0'/>
+  <mac address='{{ net_internal.mac }}'/>
+  <domain name='{{ net_internal.domain }}' localOnly='yes'/>
+{% if net_internal.dns_hosts | default([]) %}
+  <dns>
+{% for host in net_internal.dns_hosts %}
+    <host ip='{{ host.ip }}'>
+{% for hostname in host.hostnames %}
+      <hostname>{{ hostname }}</hostname>
+{% endfor %}
+    </host>
+{% endfor %}
+  </dns>
+{% endif %}
+  <ip address='{{ net_internal.address }}' netmask='{{ net_internal.netmask }}'>
+    <dhcp>
+      <range start='{{ net_internal.dhcp_start }}' end='{{ net_internal.dhcp_end }}'/>
+{% for r in net_internal.reservations %}
+      <host mac='{{ r.mac }}'{% if r.name %} name='{{ r.name }}'{% endif %} ip='{{ r.ip }}'/>
+{% endfor %}
+    </dhcp>
+  </ip>
+</network>
