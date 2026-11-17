@@ -12,7 +12,8 @@ Three stages:
   dedicated server with Rocky Linux 9.
 - `playbooks/01-deployment-version-assign.yml`, five tasks, takes the next
   deployment version (vXY) from the counter in the private repository and
-  writes the number plus one back.
+  writes the number plus one back, adding the assigned version to the list of
+  live instances.
 - `playbooks/02-host-dns-publish.yml`, four tasks, publishes the host name for
   that version at GoDaddy and waits until public DNS resolves it.
 

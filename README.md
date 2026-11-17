@@ -50,8 +50,9 @@ Refactored, reviewed and committed:
 The reinstall stage ends by proving the server presents the host keys the
 provider reports for the last installation. The deployment version stage reads
 the plaintext counter in the private repository, publishes it as
-`autodeploy_deployment_version` and writes the next number back through the
-GitHub contents API. The host DNS stage creates or corrects the name
+`autodeploy_deployment_version` and writes the next number back, with the
+assigned version added to the list of live instances, through the GitHub
+contents API. The host DNS stage creates or corrects the name
 `<label>.vXY.<zone>` at GoDaddy and waits until public DNS returns the host
 address. It never deletes names: older versions may still be live instances.
 

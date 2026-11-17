@@ -1,5 +1,20 @@
 # Design decisions history
 
+## The counter also lists the live instances — 2026-11-17
+
+Decided with the user on 17 November 2026. Several instances may be live at
+once, and DNS is not to be the single source of truth for which ones. The
+counter file therefore has two fields: `autodeploy_deployment_counter_next` and
+`autodeploy_deployment_instances_live`, seeded with `[25]`. The deployment
+version job adds the number it assigns to the list in the same write that
+advances the counter, so no value passes between jobs. The separate job that
+retires an instance removes it. A version stays listed if a deployment fails
+after the counter ran, until it is retired. The check task refuses to assign a
+number the list already contains.
+
+This replaces the earlier rule that the counter is the only runtime state
+with no stored history.
+
 ## Host DNS publishes only; deleting old names is separate — 2026-11-17
 
 Decided with the user on 17 November 2026. The host DNS stage has four tasks:
