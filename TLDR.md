@@ -6,7 +6,7 @@ and dropping the rest. See [README.md](README.md) for the full picture.
 
 ## What exists today
 
-Four stages:
+Five stages:
 
 - `playbooks/00-provider-reinstall.yml`, thirteen tasks, reinstalls a confirmed
   dedicated server with Rocky Linux 9.
@@ -18,6 +18,8 @@ Four stages:
   that version at GoDaddy and waits until public DNS resolves it.
 - `playbooks/03-rhel-convert.yml`, fourteen tasks, converts Rocky Linux 9 to
   RHEL 9 with `convert2rhel` and proves a Red Hat kernel runs.
+- `playbooks/04-rhel-update.yml`, two tasks, updates all packages and reboots
+  if anything changed.
 
 ## Before you run it
 

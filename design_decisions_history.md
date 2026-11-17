@@ -1,5 +1,16 @@
 # Design decisions history
 
+## RHEL update in two tasks, as its own playbook — 2026-11-17
+
+Decided with the user on 17 November 2026. The update stage updates all
+packages from fresh metadata and reboots through a handler if anything changed.
+It is its own playbook so it can be reused as a plain update job. Dropped: the
+facts re-read and the final RHEL, kernel vendor and address check (the
+conversion stage has just proved RHEL 9 with a Red Hat kernel, and an update
+from Red Hat repositories cannot change that; a failed reboot fails the reboot
+module itself), three more empty-host proofs, two more registration checks and
+set_stats bookkeeping.
+
 ## Conversion to RHEL in fourteen native tasks — 2026-11-17
 
 Decided with the user on 17 November 2026. The stage checks for Rocky Linux 9

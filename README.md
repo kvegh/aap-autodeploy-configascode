@@ -47,6 +47,7 @@ Refactored, reviewed and committed:
 | Deployment version | 34 | 5 |
 | Host DNS | about 45 | 4 |
 | Conversion to RHEL | about 120 | 14 |
+| RHEL update | about 20 | 2 |
 
 The reinstall stage ends by proving the server presents the host keys the
 provider reports for the last installation. The deployment version stage reads
@@ -60,7 +61,9 @@ address. It never deletes names: older versions may still be live instances.
 The conversion stage updates Rocky Linux, runs `convert2rhel -y` with
 temporary root-only credentials and proves the running kernel is Red Hat's.
 
-Not yet started: RHEL updates, host setup, retiring old DNS names, image staging. Nothing here has run against a real
+The RHEL update stage updates all packages and reboots if anything changed.
+
+Not yet started: host setup, retiring old DNS names, image staging. Nothing here has run against a real
 server yet. The old repositories remain the working implementation until a
 stage has been proven here.
 

@@ -1,0 +1,28 @@
+---
+# Update a RHEL 9 host to the latest packages and reboot if anything changed.
+#
+# Runs after the conversion stage, and can be reused as a plain update job.
+# No final RHEL check here: the conversion stage has just proved RHEL 9 with a
+# Red Hat kernel, and an update from Red Hat repositories cannot change that.
+# A failed reboot fails the reboot module itself.
+#
+# Required inventory: the host in group autodeploy_target, reachable over SSH
+# as a user with sudo, registered to Red Hat repositories.
+
+- name: Update RHEL to the latest packages
+  hosts: autodeploy_target
+  become: true
+  handlers:
+    - name: Reboot into the updated RHEL installation
+      ansible.builtin.reboot:
+        reboot_timeout: 1800
+  tasks:
+    - name: Update all packages from fresh repository metadata
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest  # noqa package-latest
+        update_cache: true
+      notify: Reboot into the updated RHEL installation
+
+    - name: Reboot now if the update changed anything
+      ansible.builtin.meta: flush_handlers
