@@ -97,7 +97,7 @@ assertions are read-only and safe to run at any time.
 | `reset_type: hardware` valid in community.hrobot 2.8.0 | yes (`software`, `hardware`, `power`, `manual`) |
 | APME (commit `9c4372f`, core 2.20; native, opa and ansible validators) | no defects; one lead open, deviations accepted below |
 | Executed against a real server | not done |
-| AAP job template and end-to-end test | not done |
+| AAP job template and end-to-end test | deployment version: job template run successful; others not done |
 
 Accepted APME deviations:
 
@@ -117,8 +117,10 @@ Accepted APME deviations:
 
 Deployment version, tested offline only: inside the EE, a simulated contents
 API response built from the real counter file rendered the expected write
-(assigns v26, writes 27, keeps the file comments). The real GitHub read and
-write have not run.
+(assigns v26, writes 27, keeps the file comments). Then run for real on
+17 November 2026 through AAP job template "AutoDeploy-NGNG 01 Deployment
+version": assigned v26, committed the counter at 27 with live list [25, 26],
+no token in the job output.
 
 Host DNS, tested with GoDaddy replaced by a local stand-in inside the EE and
 the public lookup run for real against an existing name: creates a missing
@@ -128,8 +130,8 @@ bearer header, which Ansible does not hide; run the job template at normal
 verbosity, where module arguments are not printed.
 
 Open: `M005` flags a registered value used in a template as possibly untrusted
-on ansible-core 2.19 or later. The same lead appears for the counter file
-read. The values are plain strings, so this is expected to be harmless; only a real run can confirm it.
+on ansible-core 2.19 or later. The same lead appeared for the counter file
+read; the real AAP run of that stage passed, so it is closed there. The values are plain strings, so this is expected to be harmless; only a real run can confirm it.
 APME's gitleaks, collection health and dependency audit validators did not run.
 
 Review requirements come from
