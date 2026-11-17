@@ -1,5 +1,32 @@
 # Design decisions history
 
+## Separate secrets from plain CaC definitions — 2026-11-17
+
+Decided with the user on 17 November 2026. Each use case keeps all secrets and
+environment details in one encrypted `secrets_vault.yml`, with `vault_`
+prefixed names. All other CaC files are plaintext and reference those names.
+Environment details (IP addresses, hostnames, server numbers, usernames) count
+as sensitive under the owner's rules and are encrypted even though they are not
+secrets in the narrow sense.
+
+Reasons: plaintext definitions can be read and reviewed without decrypting,
+encrypted files stay small, and Git stores readable deltas instead of a full
+new copy on every change, which is what bloated the previous repositories. The
+cost is one indirection per sensitive value; Ansible decrypts vault files
+transparently, so applying the CaC is unchanged. A leak check for addresses and
+server numbers in plaintext files runs before commits.
+
+Converting the files exposed a latent bug that encryption had hidden:
+credential type injectors and a runtime host variable used `{{ }}` templates
+meant for AAP, which applying the CaC would have evaluated. They are now marked
+`!unsafe`.
+
+The deployment counter is plaintext too, in `state/deployment_counter.yml`,
+seeded with 26: v25 was taken by the last deployment and the old counter
+reads 26. The number is public anyway through DNS names, and keeping it plain
+removes the need to expose the vault password to a playbook for re-encryption.
+How the counter job writes it is still to be decided.
+
 ## Prove the installation finished by matching host keys — 2026-11-17
 
 Decided with the user on 17 November 2026. The old trust stage
