@@ -1,5 +1,53 @@
 # Design decisions history
 
+## Agree the repository structure and deployment layers — 2026-11-17
+
+Decided with the user on 17 November 2026. This is a demo environment;
+safeguards are added only where they fix an actual problem.
+
+**Layers.** An AAP deployment is: bootstrap RHEL, configure that RHEL from
+CaC, bootstrap-install AAP, configure the AAP base from CaC, then deploy use
+cases onto that AAP from CaC. Use cases include the jobs that run the demos.
+
+**Two repositories.**
+
+- Public `aap-autodeploy-configascode`: playbooks, execution environment
+  definitions, examples. No values.
+- Private `aap-autodeploy-configascode-secrets`: all CaC, meaning AAP objects
+  together with their values, as many small Ansible Vault files split by
+  target and use case rather than a few large ones, plus the deployment counter.
+
+**Naming link.** A use case uses one short name in both repositories, for
+example `usecases/aiops/` in each, and the same suffix on its CaC variables.
+
+**State.** The only runtime state kept is the deployment counter (vXY), marked
+as written by automation. The current host keys and machine ID are
+automation-maintained but belong to CaC. Everything else is derived. The old
+install journal is not carried over: the survey ERASE confirmation guards the
+wipe, and destructive workflow nodes are never retried automatically.
+
+**PAH and collections.** PAH configuration is AAP CaC, split into base and
+per-use-case parts. Collections are not stored in any repository. Certified
+collections from Red Hat Automation Hub are preferred, synced into PAH;
+community collections only where no certified one fits. Base collections sync
+at base configuration; use-case collections come from that use case CaC.
+
+**Execution environments.** EE definitions live in the public repository with
+documented build instructions. Images are built ahead of time, stored next to
+the VM images on the shared drive, downloaded with pinned checksums, and
+imported into the PAH container registry once PAH is up. Nothing is built at
+deployment time. Where the build runs is not decided yet; a later use case will
+rebuild all EEs.
+
+**Generated secrets.** Base configuration holds the vault credential and a Git
+write credential for the secrets repository. Only one job template, "Store
+generated secret", uses the write credential; use cases call it rather than
+pushing themselves. The active AAP is the only writer; a newly built AAP is a
+passive configuration target until it takes over.
+
+**AutoDeploy is a use case.** Deploying an AAP is itself a use case, installed
+like any other, so every new AAP can build its successor.
+
 ## Refactor the provider reinstall stage — 2026-11-17
 
 Decided with the user on 17 November 2026, after a rated review of all 439 task
