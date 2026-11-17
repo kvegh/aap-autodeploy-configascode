@@ -1,5 +1,21 @@
 # Design decisions history
 
+## Host DNS publishes only; deleting old names is separate — 2026-11-17
+
+Decided with the user on 17 November 2026. The host DNS stage has four tasks:
+build `<label>.vXY.<zone>` from the deployment version, read the A record at
+GoDaddy, create or update it when address or TTL differ, and wait until Google
+public DNS returns exactly the host address. It never deletes a name. Several
+instances may be live at once, so deleting an older name is a separate job and
+must never assume that the previous version is obsolete.
+
+Dropped from the old stage: three repeated derivations of the name, four
+repeated target checks, a second provider read after the write, the wait for
+the authoritative name servers (a 425-line script; the retrying public lookup
+covers it) and the refusal to overwrite a record pointing elsewhere (the
+counter never reuses a version). GoDaddy has no maintained Ansible module, so
+`ansible.builtin.uri` calls the v3 API.
+
 ## The counter job writes its own counter file — 2026-11-17
 
 Decided with the user on 17 November 2026. The deployment version job reads

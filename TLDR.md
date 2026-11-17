@@ -6,13 +6,15 @@ and dropping the rest. See [README.md](README.md) for the full picture.
 
 ## What exists today
 
-Two stages:
+Three stages:
 
 - `playbooks/00-provider-reinstall.yml`, thirteen tasks, reinstalls a confirmed
   dedicated server with Rocky Linux 9.
 - `playbooks/01-deployment-version-assign.yml`, five tasks, takes the next
   deployment version (vXY) from the counter in the private repository and
   writes the number plus one back.
+- `playbooks/02-host-dns-publish.yml`, four tasks, publishes the host name for
+  that version at GoDaddy and waits until public DNS resolves it.
 
 ## Before you run it
 
@@ -31,5 +33,5 @@ Two stages:
 ## State of verification
 
 Strict lint and syntax check pass, also inside the AAP execution environment on
-ansible-core 2.20.10. Neither stage has run for real; the deployment version
-stage has no AAP job template yet. The previous implementation remains the working one.
+ansible-core 2.20.10. No stage has run for real; only the reinstall stage has an AAP job
+template. The previous implementation remains the working one.

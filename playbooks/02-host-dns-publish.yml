@@ -1,0 +1,83 @@
+---
+# Publish the public DNS name of the rebuilt host, for example
+# hactar.v26.<zone>, and wait until public DNS resolves it.
+#
+# This playbook only creates or corrects the new name. It never deletes a
+# name: older versions may still belong to live instances.
+#
+# Required variables, supplied by the job template, the workflow and the DNS
+# credential:
+#   autodeploy_deployment_version   published by the deployment version stage
+#   dns_godaddy_token               GoDaddy API token for the zone
+#   dns_zone                        DNS zone, for example example.com
+#   dns_host_label                  first label of the host name, for example hactar
+#   dns_host_ipv4                   public IPv4 of the rebuilt host
+#
+# The record is written through the GoDaddy v3 API with ansible.builtin.uri:
+# no maintained collection has a GoDaddy DNS module.
+
+- name: Publish the host DNS name of this deployment
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    dns_api_base: https://api.godaddy.com
+    dns_ttl: 600
+  tasks:
+    - name: Build the host name from the deployment version
+      ansible.builtin.set_fact:
+        dns_record: "{{ dns_host_label }}.{{ autodeploy_deployment_version }}"
+        dns_fqdn: "{{ dns_host_label }}.{{ autodeploy_deployment_version }}.{{ dns_zone }}"
+
+    - name: Read the existing A record of the host name
+      ansible.builtin.uri:
+        url: >-
+          {{ dns_api_base }}/v3/domains/zones/{{ dns_zone | urlencode }}/dns-records?type=A&name={{ dns_record | urlencode }}
+        method: GET
+        headers:
+          Authorization: "Bearer {{ dns_godaddy_token }}"
+        return_content: true
+        status_code: 200
+        timeout: 30
+      register: dns_existing
+      check_mode: false
+
+    - name: Create or update the A record when it differs
+      ansible.builtin.uri:
+        url: >-
+          {{ dns_api_base }}/v3/domains/zones/{{ dns_zone | urlencode }}/dns-records{{
+          '/' ~ (dns_existing.json['items'][0].recordId | urlencode)
+          if dns_existing.json['items'] | length > 0 else '' }}
+        method: "{{ 'PUT' if dns_existing.json['items'] | length > 0 else 'POST' }}"
+        headers:
+          Authorization: "Bearer {{ dns_godaddy_token }}"
+        body_format: json
+        body:
+          name: "{{ dns_record }}"
+          type: A
+          data: "{{ dns_host_ipv4 }}"
+          ttl: "{{ dns_ttl | int }}"
+        status_code: "{{ 200 if dns_existing.json['items'] | length > 0 else 201 }}"
+        timeout: 30
+      when: >-
+        dns_existing.json['items'] | map(attribute='data') | list != [dns_host_ipv4]
+        or dns_existing.json['items'] | map(attribute='ttl') | map('int') | list != [dns_ttl | int]
+      changed_when: true
+
+    # Later stages reach the host by name, so wait for the public answer, not
+    # only the provider's. A fresh name can take a while to propagate.
+    - name: Wait until public DNS returns exactly the host address
+      ansible.builtin.uri:
+        url: "https://dns.google/resolve?name={{ dns_fqdn | urlencode }}&type=A"
+        method: GET
+        return_content: true
+        status_code: 200
+        timeout: 30
+      register: dns_public
+      until: >-
+        dns_public.json.Answer | default([]) | selectattr('type', 'equalto', 1)
+        | map(attribute='data') | list == [dns_host_ipv4]
+      retries: 180
+      delay: 5
+      check_mode: false
