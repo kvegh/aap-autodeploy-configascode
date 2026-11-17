@@ -1,5 +1,20 @@
 # Design decisions history
 
+## Generate an SSH keypair for the ansible account — 2026-11-17
+
+Decided with the user on 17 November 2026.
+
+- No keypair for the automation account existed in the new repositories. The
+  old AAP machine credential's key cannot be exported and belongs to the old
+  setup, so a new keypair is generated.
+- Type ed25519.
+- The private and the public key are stored in `secrets_vault.yml`
+  (`vault_ansible_ssh_private_key`, `vault_ansible_ssh_public_key`).
+- The public key is also in the provider key list (`vault_robot_ssh_keys`), so
+  the reinstall installs it for root and the bootstrap stage can connect.
+- The same key later fills the AAP machine credential for user `ansible` and
+  the `ansible` user's authorized keys.
+
 ## Host access bootstrap, two SSH addresses, port in the AAP inventory — 2026-11-17
 
 Decided with the user on 17 November 2026.
