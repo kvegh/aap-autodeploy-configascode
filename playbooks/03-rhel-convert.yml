@@ -1,0 +1,130 @@
+---
+# Convert the freshly installed Rocky Linux 9 host to RHEL 9 with the official
+# convert2rhel utility, following the Red Hat command line procedure.
+#
+# The infra.convert2rhel collection is not used: its 1.2.1 release selects
+# only EL7 and EL8 repositories, and the native tasks here are few.
+#
+# Required inventory: the rebuilt host in group autodeploy_target, reachable
+# over SSH as a user with sudo.
+#
+# Required variables, supplied by the encrypted vault:
+#   rhsm_org_id           Red Hat subscription organization ID
+#   rhsm_activation_key   activation key that registers the host
+#
+# There is no separate "convert2rhel analyze" run: "convert2rhel -y" runs the
+# same checks and stops before changing anything if one fails. Running the job
+# template is the decision to convert; there is no extra acceptance flag, and
+# convert2rhel itself has none.
+#
+# A host that already runs RHEL ends the play at the start, so a rerun after a
+# completed conversion changes nothing.
+
+- name: Convert Rocky Linux 9 to RHEL 9
+  hosts: autodeploy_target
+  become: true
+  handlers:
+    - name: Reboot into the updated Rocky Linux kernel
+      ansible.builtin.reboot:
+        reboot_timeout: 1200
+  vars:
+    convert2rhel_repo_url: https://cdn-public.redhat.com/content/public/repofiles/convert2rhel-for-rhel-9-x86_64.repo
+    convert2rhel_gpg_key_url: https://security.access.redhat.com/data/fd431d51.txt
+  tasks:
+    - name: Require Rocky Linux 9 or RHEL 9 on x86_64
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['distribution'] in ['Rocky', 'RedHat']
+          - ansible_facts['distribution_major_version'] == '9'
+          - ansible_facts['architecture'] == 'x86_64'
+        fail_msg: This stage converts Rocky Linux 9 x86_64 to RHEL 9 only.
+
+    - name: Stop on a host that already runs RHEL
+      ansible.builtin.meta: end_host
+      when: ansible_facts['distribution'] == 'RedHat'
+
+    # convert2rhel refuses to run unless the latest packages are installed
+    # and the newest kernel is running.
+    - name: Update Rocky Linux to the latest packages
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest  # noqa package-latest
+      notify: Reboot into the updated Rocky Linux kernel
+
+    - name: Reboot now if the update changed anything
+      ansible.builtin.meta: flush_handlers
+
+    - name: Add the official convert2rhel repository
+      ansible.builtin.get_url:
+        url: "{{ convert2rhel_repo_url }}"
+        dest: /etc/yum.repos.d/convert2rhel.repo
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Trust the Red Hat package signing key
+      ansible.builtin.rpm_key:
+        key: "{{ convert2rhel_gpg_key_url }}"
+        state: present
+
+    - name: Install convert2rhel
+      ansible.builtin.dnf:
+        name: convert2rhel
+        state: present
+
+    - name: Convert with temporary subscription credentials
+      block:
+        # The credentials go into a root-only file rather than the command
+        # line, where every local user could read them in the process list.
+        - name: Write the subscription credentials for convert2rhel
+          ansible.builtin.copy:
+            dest: /etc/convert2rhel.ini
+            owner: root
+            group: root
+            mode: "0600"
+            content: |
+              [subscription_manager]
+              org = {{ rhsm_org_id }}
+              activation_key = {{ rhsm_activation_key }}
+          no_log: true
+
+        - name: Convert the operating system to RHEL 9
+          ansible.builtin.command:
+            argv: [convert2rhel, -y, --config-file, /etc/convert2rhel.ini]
+          changed_when: true
+          async: 14400
+          poll: 30
+      always:
+        - name: Remove the subscription credentials file
+          ansible.builtin.file:
+            path: /etc/convert2rhel.ini
+            state: absent
+
+    - name: Reboot into the RHEL kernel
+      ansible.builtin.reboot:
+        reboot_timeout: 1800
+
+    - name: Read the facts of the converted host
+      ansible.builtin.setup:
+
+    # Facts say "RedHat" as soon as the release files are swapped, but the
+    # kernel is a separate package that only takes effect after the reboot.
+    # If the conversion broke in between, or the boot menu still defaults to
+    # the old kernel, facts show RHEL 9 while the Rocky kernel runs. The kernel
+    # version cannot tell them apart (both end in .el9); only the vendor of the
+    # running kernel's package can. Kept on purpose, decided 2026-11-17: one
+    # read-only query that catches a half-finished conversion here instead of
+    # as odd behaviour in later stages.
+    - name: Read the vendor of the running kernel package
+      ansible.builtin.command:
+        argv: [rpm, -qf, "/boot/vmlinuz-{{ ansible_facts['kernel'] }}", --queryformat, "%{VENDOR}"]
+      register: rhel_convert_kernel_vendor
+      changed_when: false
+
+    - name: Require RHEL 9 with a Red Hat kernel
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['distribution'] == 'RedHat'
+          - ansible_facts['distribution_major_version'] == '9'
+          - "'Red Hat' in rhel_convert_kernel_vendor.stdout"
+        fail_msg: The host does not run RHEL 9 with a Red Hat kernel; the conversion did not complete.

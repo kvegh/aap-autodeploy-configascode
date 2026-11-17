@@ -1,5 +1,35 @@
 # Design decisions history
 
+## Conversion to RHEL in fourteen native tasks — 2026-11-17
+
+Decided with the user on 17 November 2026. The stage checks for Rocky Linux 9
+or RHEL 9 on x86_64 (the check carried over from the dropped preflight), ends
+on a host that already runs RHEL, updates Rocky and reboots if anything
+changed, adds the official convert2rhel repository and signing key, installs
+convert2rhel, runs `convert2rhel -y` with credentials in a temporary root-only
+file that is always removed, reboots, reads facts again and requires RHEL 9
+with a Red Hat kernel.
+
+Dropped: the separate `convert2rhel analyze` run (the conversion runs the same
+checks first), the EULA acceptance flag (the project's own gate; convert2rhel
+has no such argument, and launching the job template is the decision), the
+subscription registration check (convert2rhel fails if registration fails, and
+the following update stage needs the RHEL repositories anyway), and around a
+hundred task lines of repeated empty-host proofs, VM isolation code WF1 never
+ran, cleanup of files a reinstall had already wiped, and saved-approval logic.
+`infra.convert2rhel` 1.2.1 selects only EL7 and EL8 repositories, so native
+tasks are used.
+
+Kept on purpose: the kernel vendor check. Facts report RedHat as soon as the
+release files are swapped, but the kernel is a separate package that only
+takes effect after the reboot. A conversion that broke in between, or a boot
+menu still defaulting to the old kernel, would show RHEL 9 in facts while the
+Rocky kernel runs. The kernel version cannot tell them apart, since both end in
+`.el9`; only the vendor of the running kernel's package can. It is one
+read-only query that catches a half-finished conversion where it happens,
+instead of as odd behaviour in later stages. convert2rhel normally sets the
+RHEL kernel as default and rolls back on failure, so this is rare.
+
 ## The counter also lists the live instances — 2026-11-17
 
 Decided with the user on 17 November 2026. Several instances may be live at

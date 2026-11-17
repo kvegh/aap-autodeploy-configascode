@@ -46,6 +46,7 @@ Refactored, reviewed and committed:
 | Provider reinstall | 24 | 13 |
 | Deployment version | 34 | 5 |
 | Host DNS | about 45 | 4 |
+| Conversion to RHEL | about 120 | 14 |
 
 The reinstall stage ends by proving the server presents the host keys the
 provider reports for the last installation. The deployment version stage reads
@@ -56,8 +57,10 @@ contents API. The host DNS stage creates or corrects the name
 `<label>.vXY.<zone>` at GoDaddy and waits until public DNS returns the host
 address. It never deletes names: older versions may still be live instances.
 
-Not yet started: conversion to RHEL,
-updates, host setup, retiring old DNS names, image staging. Nothing here has run against a real
+The conversion stage updates Rocky Linux, runs `convert2rhel -y` with
+temporary root-only credentials and proves the running kernel is Red Hat's.
+
+Not yet started: RHEL updates, host setup, retiring old DNS names, image staging. Nothing here has run against a real
 server yet. The old repositories remain the working implementation until a
 stage has been proven here.
 
@@ -66,7 +69,8 @@ stage has been proven here.
 - Playbooks are `NN-subject-action.yml`, numbered in execution order.
 - Variables use `snake_case` with a prefix naming their source: `robot_` for
   provider API inputs and confirmations, `provider_` for values this automation
-  derives at run time, `counter_` for the deployment counter, `dns_` for the host DNS stage. Values published
+  derives at run time, `counter_` for the deployment counter, `dns_` for the host DNS stage, `rhsm_` for subscription inputs. Registered
+  values carry the stage name, for example `rhel_convert_`. Values published
   for later workflow nodes start with `autodeploy_`.
 - Task names start with a capital and an imperative verb, and say what the task
   achieves rather than which module it calls.
@@ -128,6 +132,15 @@ record, leaves a correct one alone, corrects a wrong one. The real GoDaddy
 read and write have not run. The GoDaddy v3 API takes the token only as a
 bearer header, which Ansible does not hide; run the job template at normal
 verbosity, where module arguments are not printed.
+
+Conversion to RHEL, accepted APME findings: `R108` privilege escalation (the
+stage changes the operating system); `R104`/`R106` downloads from a URL
+variable (the official Red Hat repository file, fixed in the play); `R109`
+signing key from a variable (the official Red Hat key URL); `R101` command with
+a parameter (the kernel version from facts, read only); `L071`/`L072` inline
+content without backup (a three-line credentials file that is removed again);
+`L004` deprecated `rpm_key`: a false positive, ansible-core 2.20.10 shows no
+deprecation for it. Not executed yet.
 
 Open: `M005` flags a registered value used in a template as possibly untrusted
 on ansible-core 2.19 or later. The same lead appeared for the counter file
