@@ -38,4 +38,11 @@ inside a custom Python script in a later stage. Answering on SSH does not prove
 the installation is fresh; the identity stage still has to verify the changed
 host keys and machine ID.
 
-Not yet validated against a real server.
+Implementation commit: `6678bd1`.
+
+Collection requirements name no source, so private automation hub resolves them
+through AAP rather than the repository pinning a public endpoint.
+
+Not yet validated against a real server. Strict lint and a syntax check pass
+against local ansible-core 2.16.19, which is older than the execution
+environment's 2.20; that difference is unverified.
