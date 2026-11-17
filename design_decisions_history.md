@@ -1,5 +1,24 @@
 # Design decisions history
 
+## Wait for the provider to consume the installation request — 2026-11-17
+
+Decided with the user on 17 November 2026. The provider installs from its
+rescue system, which also runs OpenSSH on port 22, so the `wait_for` on SSH
+could succeed while the installer was still running. Hetzner documents the
+automatic installation only as activate, reset, completes automatically; the
+manual installimage flow boots the rescue system, installs, then reboots, and
+the previous implementation guarded against exactly this. In the last real run
+the server was ready about six minutes after the reset.
+
+A tenth task now polls `community.hrobot.boot` with `regular_boot: true` in
+check mode until it reports no change, meaning no installation configuration is
+still active. Check mode makes no provider change. No helper code was needed.
+
+Whether the provider clears the configuration when the installer starts or when
+it finishes is not documented. The identity stage therefore remains the real
+proof: it must compare the server's host keys with the keys the provider
+reports for the last installation, retrying until they match.
+
 ## Agree the repository structure and deployment layers — 2026-11-17
 
 Decided with the user on 17 November 2026. This is a demo environment;

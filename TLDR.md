@@ -6,7 +6,7 @@ and dropping the rest. See [README.md](README.md) for the full picture.
 
 ## What exists today
 
-One stage: `playbooks/00-provider-reinstall.yml`, nine tasks, reinstalling a
+One stage: `playbooks/00-provider-reinstall.yml`, ten tasks, reinstalling a
 confirmed dedicated server with Rocky Linux 9.
 
 ## Before you run it

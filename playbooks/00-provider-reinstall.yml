@@ -97,6 +97,23 @@
         server_number: "{{ robot_server_number | int }}"
         reset_type: hardware
 
+    # The provider installs from its rescue system, which also answers on SSH,
+    # so SSH alone cannot tell the installer from the installed system. Wait
+    # until the provider has consumed the installation request first. In check
+    # mode the boot module only reports whether it would still deactivate an
+    # active configuration, so this changes nothing.
+    - name: Wait until the provider has consumed the installation request
+      community.hrobot.boot:
+        hetzner_user: "{{ robot_username }}"
+        hetzner_password: "{{ robot_password }}"
+        server_number: "{{ robot_server_number | int }}"
+        regular_boot: true
+      check_mode: true
+      register: provider_boot_state
+      until: not provider_boot_state.changed
+      retries: 60
+      delay: 30
+
     - name: Wait for the reinstalled server to answer on SSH
       ansible.builtin.wait_for:
         host: "{{ robot_expected_server_ip }}"

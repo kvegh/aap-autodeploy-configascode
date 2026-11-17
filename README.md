@@ -43,7 +43,7 @@ Refactored, reviewed and committed:
 
 | Stage | Tasks before | Tasks after |
 |---|---|---|
-| Provider reinstall | 24 | 9 |
+| Provider reinstall | 24 | 10 |
 
 Not yet started: host identity, deployment version, conversion to RHEL,
 updates, host setup, DNS, image staging. Nothing here has run against a real
