@@ -2,41 +2,68 @@
 # SSH hardening and the move from port 22 to the managed port, without locking
 # ourselves out.
 #
-# sshd first listens on both 22 and the managed port. The run then switches to
-# the managed port and proves login plus sudo. Only after that proof does sshd
-# drop port 22 and the firewall close it. If the proof fails, port 22 still
-# works and the host can be fixed without a reinstall.
+# sshd ends up listening on exactly two addresses: the public address on the
+# managed port, and the internal libvirt bridge address on port 22, where the
+# VMs (AAP's among them) reach the hypervisor. It first also listens on the
+# public address on port 22. The run then switches to the managed port, proves
+# login plus sudo and records the port in the AAP inventory for later jobs.
+# Only after that does sshd drop public port 22 and the firewall close it. If
+# the proof fails, port 22 still works and the host can be fixed without a
+# reinstall.
+#
+# Port 22 stays reachable on the bridge: libvirt puts its bridges in
+# firewalld's libvirt zone, which allows the ssh service by default.
 #
 # The managed port is private and comes from the vault. It applies to this
 # hypervisor only; the VMs keep SSH on port 22.
 #
-# Required variables (vault):
-#   host_ssh_port          managed SSH port
-#   host_ssh_allow_users   accounts allowed to log in
+# Required variables:
+#   host_ssh_port          vault: managed SSH port
+#   host_ssh_allow_users   vault: accounts allowed to log in, including ansible
+#   dns_host_ipv4          vault: public IPv4 of the host, as for the host DNS stage
+#   net_internal           vault: the internal network; its address is the bridge's
+#   aap_inventory_name     AAP inventory that holds this host under its inventory name
+#
+# Credentials: the machine credential, and the standard Red Hat Ansible
+# Automation Platform credential, which hands the controller URL and login to
+# ansible.controller as environment variables.
 
 - name: Harden SSH and move it to the managed port
   hosts: autodeploy_target
   become: true
+  vars_files:
+    - ../vars/sshd-hardening.yml
   vars:
-    host_sshd_settings:
-      PermitRootLogin: "no"
-      PasswordAuthentication: "no"
-      KbdInteractiveAuthentication: "no"
-      PubkeyAuthentication: "yes"
-      AllowUsers: "{{ host_ssh_allow_users | join(' ') }}"
+    # Port is only read by the role to label the managed port ssh_port_t in
+    # SELinux; each ListenAddress carries its own port.
+    host_sshd_settings: >-
+      {{ host_sshd_hardening | combine({'AllowUsers': host_ssh_allow_users | join(' '),
+      'Port': host_ssh_port | int}) }}
+    host_sshd_listen_final:
+      - "{{ dns_host_ipv4 }}:{{ host_ssh_port }}"
+      - "{{ net_internal.address }}:22"
   tasks:
-    # sshd_manage_selinux labels the managed port as ssh_port_t, so sshd can
-    # bind it. The firewall stage has already opened it for the management
-    # networks.
-    - name: Listen on port 22 and the managed port
+    # sshd may start at boot before libvirt has created the bridge. Without
+    # this, it would skip the bridge address and never listen there.
+    - name: Let sshd bind addresses that are not up yet
+      ansible.posix.sysctl:
+        name: net.ipv4.ip_nonlocal_bind
+        value: "1"
+        sysctl_file: /etc/sysctl.d/80-sshd-nonlocal-bind.conf
+        sysctl_set: true
+        reload: true
+
+    - name: Listen on public port 22, the public managed port and the bridge
       ansible.builtin.include_role:
         name: redhat.rhel_system_roles.sshd
       vars:
-        sshd_config_file: /etc/ssh/sshd_config.d/10-hypervisor.conf
+        sshd_config_file: "{{ host_sshd_config_file }}"
         sshd_manage_selinux: true
-        sshd_config: "{{ host_sshd_settings | combine({'Port': [22, host_ssh_port | int]}) }}"
+        sshd_config: >-
+          {{ host_sshd_settings | combine({'ListenAddress':
+          host_sshd_listen_final + [dns_host_ipv4 ~ ':22']}) }}
 
-    - name: Apply the dual-port configuration now
+    - name: Apply the transitional configuration now
       ansible.builtin.meta: flush_handlers
 
     - name: Switch this run to the managed port
@@ -49,18 +76,34 @@
     - name: Prove login and sudo on the managed port
       ansible.builtin.ping:
 
-    - name: Listen on the managed port only
+    # Later jobs read the port from the inventory instead of probing for it.
+    # The current host variables are read and merged, so nothing else is lost.
+    # The reinstall stage removes the port again.
+    - name: Record the managed port in the AAP inventory
+      ansible.controller.host:
+        name: "{{ inventory_hostname }}"
+        inventory: "{{ aap_inventory_name }}"
+        variables: "{{ aap_host_variables | combine({'ansible_port': host_ssh_port | int}) }}"
+      vars:
+        aap_host_variables: >-
+          {{ (lookup('ansible.controller.controller_api', 'hosts', expect_one=true,
+          query_params={'name': inventory_hostname, 'inventory__name': aap_inventory_name}).variables
+          | from_yaml) | default({}, true) }}
+      delegate_to: localhost
+      become: false
+
+    - name: Listen on the public managed port and the bridge only
       ansible.builtin.include_role:
         name: redhat.rhel_system_roles.sshd
       vars:
-        sshd_config_file: /etc/ssh/sshd_config.d/10-hypervisor.conf
+        sshd_config_file: "{{ host_sshd_config_file }}"
         sshd_manage_selinux: true
-        sshd_config: "{{ host_sshd_settings | combine({'Port': host_ssh_port | int}) }}"
+        sshd_config: "{{ host_sshd_settings | combine({'ListenAddress': host_sshd_listen_final}) }}"
 
     - name: Apply the final SSH configuration now
       ansible.builtin.meta: flush_handlers
 
-    - name: Close port 22 in the firewall
+    - name: Close port 22 on the public zone
       ansible.posix.firewalld:
         service: ssh
         zone: public

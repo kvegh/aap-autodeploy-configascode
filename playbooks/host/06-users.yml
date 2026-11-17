@@ -1,18 +1,16 @@
 ---
-# Users, SSH keys and sudo, then prove the admin login before SSH hardening.
+# Users, SSH keys and sudo for the people working on the host.
 #
-# The SSH stage later turns off root login and moves the port. If the admin
-# login did not work by then, the host would be unreachable. So this stage
-# switches the run to the admin user and proves login plus sudo while root
-# still works. The admin account accepts the same SSH key as the bootstrap
-# root login, so one machine credential covers both.
+# The ansible account already exists: the host access bootstrap created it and
+# proved its login and sudo before root login was turned off. This stage adds
+# the remaining users. Admins are members of wheel, which has passwordless
+# sudo.
 #
 # Required variables (vault):
 #   host_users             list of {name, uid, gid (optional), groups}; admins include wheel
 #   host_authorized_keys   dict: user name -> list of public keys
-#   host_admin_user        the account later runs use
 
-- name: Configure users and prove the admin login
+- name: Configure the users
   hosts: autodeploy_target
   become: true
   gather_facts: false
@@ -58,13 +56,3 @@
           # Managed by aap-autodeploy-configascode
           %wheel ALL=(ALL) NOPASSWD: ALL
         validate: /usr/sbin/visudo -cf %s
-
-    - name: Switch this run to the admin user
-      ansible.builtin.set_fact:
-        ansible_user: "{{ host_admin_user }}"
-
-    - name: Reconnect as the admin user
-      ansible.builtin.meta: reset_connection
-
-    - name: Prove the admin login and sudo
-      ansible.builtin.ping:

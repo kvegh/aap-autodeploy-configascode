@@ -1,0 +1,9 @@
+---
+# SSH settings shared by the host access bootstrap and the SSH stage. Both
+# write the same drop-in file; one definition keeps them from drifting apart.
+host_sshd_config_file: /etc/ssh/sshd_config.d/10-hypervisor.conf
+host_sshd_hardening:
+  PermitRootLogin: "no"
+  PasswordAuthentication: "no"
+  KbdInteractiveAuthentication: "no"
+  PubkeyAuthentication: "yes"

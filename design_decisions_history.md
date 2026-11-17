@@ -1,5 +1,44 @@
 # Design decisions history
 
+## Host access bootstrap, two SSH addresses, port in the AAP inventory — 2026-11-17
+
+Decided with the user on 17 November 2026.
+
+- New stage `03-host-access-bootstrap.yml` right after the reinstall; the
+  conversion, update and host setup move to 04, 05 and 06. It runs as root on
+  port 22 (keys only), creates the `ansible` account (fixed uid, exclusive
+  keys, `NOPASSWD` sudo), proves login and sudo as `ansible`, then turns off
+  root, password and keyboard-interactive login. Reason: the host is exposed to
+  the internet from the first minute, and the old WF1 ran as root through most
+  of its run. Everything later runs as `ansible`, the AAP machine credential
+  user. `NOPASSWD`, because with key-only access a sudo password adds little
+  and would be one more secret to store and inject.
+- `host-connect.yml` is removed. The SSH stage records the managed port as
+  `ansible_port` on the AAP inventory host (`ansible.controller.host`, merged
+  with the existing host variables read through the `controller_api` lookup),
+  and the reinstall stage removes it again before the erase, after the
+  confirmations. Reason: the inventory states the port instead of every job
+  probing for it.
+- The users stage no longer proves an admin login (the bootstrap did);
+  `host_admin_user` is gone.
+- sshd listens on exactly two addresses: the public address on the managed
+  port and the internal libvirt bridge on port 22. Reason: VMs on the internal
+  network, AAP's among them, reach the hypervisor on internal port 22, which
+  production shows in active use. The dual-port safety net stays: public 22 is
+  dropped and closed on the public zone only after login on the managed port is
+  proven. The libvirt firewalld zone allows ssh by default.
+  `net.ipv4.ip_nonlocal_bind = 1` lets sshd bind the bridge address when it
+  starts at boot before libvirt has created the bridge. The hardening settings
+  are defined once and shared by the bootstrap and the SSH stage.
+- The managed SSH port is open to everyone (the user logs in from changing
+  addresses); `host_management_sources` is gone.
+- fail2ban ignores our own public addresses (`host_trusted_public_ips`).
+  Reason: a real check that root login is refused attempts that login from AAP
+  and must not get AAP banned.
+- `ansible.controller` 4.8.11, the version proven with the previous
+  implementation, is added to the collection requirements.
+- The post-reboot verification is still under discussion and not built.
+
 ## Host setup in ten native stages — 2026-11-17
 
 Decided with the user on 17 November 2026, stage by stage, and built as

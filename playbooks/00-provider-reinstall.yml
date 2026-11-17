@@ -13,6 +13,12 @@
 #   robot_ssh_keys                   list of {name, public_key} for root login
 #   robot_install_distribution       exact provider image name for Rocky Linux 9
 #   robot_install_language           installer language, for example en
+#   aap_inventory_name               AAP inventory that holds the target host
+#   aap_inventory_host_name          the target's host name in that inventory
+#
+# Credentials: the provider API credential, and the standard Red Hat Ansible
+# Automation Platform credential, which hands the controller URL and login to
+# ansible.controller as environment variables.
 #
 # Required confirmations, supplied by the job template survey:
 #   robot_confirm_server_number      must equal robot_server_number
@@ -63,6 +69,22 @@
           - robot_protected_server_ips | length > 0
           - robot_expected_server_ip not in robot_protected_server_ips
         fail_msg: The target must not be one of the protected production addresses.
+
+    # The SSH stage records the managed port as ansible_port on the target's
+    # AAP inventory host. The reinstalled host answers on port 22 again, so
+    # the port is removed before the erase. This is an AAP write, so it comes
+    # after the confirmations. The current host variables are read and the
+    # rest written back unchanged.
+    - name: Let later jobs reach the reinstalled host on port 22 again
+      ansible.controller.host:
+        name: "{{ aap_inventory_host_name }}"
+        inventory: "{{ aap_inventory_name }}"
+        variables: "{{ aap_host_variables | dict2items | rejectattr('key', 'equalto', 'ansible_port') | items2dict }}"
+      vars:
+        aap_host_variables: >-
+          {{ (lookup('ansible.controller.controller_api', 'hosts', expect_one=true,
+          query_params={'name': aap_inventory_host_name, 'inventory__name': aap_inventory_name}).variables
+          | from_yaml) | default({}, true) }}
 
     - name: Register the reviewed SSH public keys
       community.hrobot.ssh_key:

@@ -4,11 +4,9 @@
 # One job: the stages below run in this order. Each stage is also a playbook of
 # its own in playbooks/host/ and can be run alone on a finished host.
 #
-# Inventory: the host in group autodeploy_target. Variables are listed in each
-# stage's header; secrets and environment details come from the vault.
-
-- name: Choose the SSH port and user
-  ansible.builtin.import_playbook: host-connect.yml
+# Inventory: the host in group autodeploy_target, reached as ansible on the
+# port recorded in the AAP inventory. Variables are listed in each stage's
+# header; secrets and environment details come from the vault.
 
 - name: Base settings
   ansible.builtin.import_playbook: host/01-base.yml
@@ -25,7 +23,7 @@
 - name: Libvirt networks
   ansible.builtin.import_playbook: host/05-libvirt-networks.yml
 
-- name: Users and admin login proof
+- name: Users
   ansible.builtin.import_playbook: host/06-users.yml
 
 - name: Firewall

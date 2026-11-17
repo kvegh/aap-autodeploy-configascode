@@ -1,0 +1,90 @@
+---
+# Create the ansible account and turn off root login, minutes after the
+# reinstall.
+#
+# The host is exposed to the internet from the moment the provider has
+# installed it, with root login by key on port 22. The previous implementation
+# ran as root through most of its run. This stage runs first: it creates
+# ansible, the user of the AAP machine credential, proves its login and sudo,
+# and only then turns off root, password and keyboard-interactive login. Every
+# later stage runs as ansible.
+#
+# ansible gets passwordless sudo: it logs in by key only, so a sudo password
+# would add little and would have to be stored and injected as one more secret.
+#
+# Required inventory: the host in group autodeploy_target, on port 22. The
+# reinstall stage removes ansible_port from the AAP inventory host.
+#
+# The machine credential's SSH key must be one of the keys the reinstall stage
+# installed for root (robot_ssh_keys) and one of the keys listed for ansible.
+#
+# Required variables (vault):
+#   host_ansible_uid       fixed uid and gid of the ansible account
+#   host_authorized_keys   dict: user name -> list of public keys; uses 'ansible'
+#   host_bootstrap_user    optional, login of the fresh installation, default
+#                          root. Set it to ansible to rerun this stage once root
+#                          login is off.
+
+- name: Create the ansible account and turn off root login
+  hosts: autodeploy_target
+  become: true
+  # The machine credential logs in as ansible, which does not exist yet on a
+  # fresh installation. Play variables override the credential's user, so this
+  # play alone starts as root; the tasks below switch it to ansible.
+  vars:
+    ansible_user: "{{ host_bootstrap_user | default('root') }}"
+  vars_files:
+    - vars/sshd-hardening.yml
+  tasks:
+    - name: Create the ansible group with a fixed ID
+      ansible.builtin.group:
+        name: ansible
+        gid: "{{ host_ansible_uid }}"
+        state: present
+
+    - name: Create the ansible user with a fixed ID
+      ansible.builtin.user:
+        name: ansible
+        uid: "{{ host_ansible_uid }}"
+        group: ansible
+        state: present
+
+    - name: Allow exactly the declared SSH keys for ansible
+      ansible.posix.authorized_key:
+        user: ansible
+        key: "{{ host_authorized_keys['ansible'] | join('\n') }}"
+        exclusive: true
+        state: present
+
+    - name: Allow passwordless sudo for ansible
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/ansible
+        owner: root
+        group: root
+        mode: "0440"
+        content: |
+          # Managed by aap-autodeploy-configascode
+          ansible ALL=(ALL) NOPASSWD: ALL
+        validate: /usr/sbin/visudo -cf %s
+
+    - name: Switch this run to ansible
+      ansible.builtin.set_fact:
+        ansible_user: ansible
+
+    - name: Reconnect as ansible
+      ansible.builtin.meta: reset_connection
+
+    # Root login is turned off next; without this proof the host could be
+    # left with no working login.
+    - name: Prove the ansible login and sudo
+      ansible.builtin.ping:
+
+    - name: Turn off root, password and keyboard-interactive login
+      ansible.builtin.include_role:
+        name: redhat.rhel_system_roles.sshd
+      vars:
+        sshd_config_file: "{{ host_sshd_config_file }}"
+        sshd_config: "{{ host_sshd_hardening }}"
+
+    - name: Apply the SSH configuration now
+      ansible.builtin.meta: flush_handlers

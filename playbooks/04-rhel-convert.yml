@@ -6,7 +6,7 @@
 # only EL7 and EL8 repositories, and the native tasks here are few.
 #
 # Required inventory: the rebuilt host in group autodeploy_target, reachable
-# over SSH as a user with sudo.
+# over SSH as ansible, the account the host access bootstrap created.
 #
 # Required variables, supplied by the encrypted vault:
 #   rhsm_org_id           Red Hat subscription organization ID
@@ -19,9 +19,6 @@
 #
 # A host that already runs RHEL ends the play at the start, so a rerun after a
 # completed conversion changes nothing.
-
-- name: Choose the SSH port and user
-  ansible.builtin.import_playbook: host-connect.yml
 
 - name: Convert Rocky Linux 9 to RHEL 9
   hosts: autodeploy_target

@@ -12,6 +12,7 @@
 #   nginx_rate_limit_zone     name of the login rate limit zone, e.g. aap_login
 #   nginx_rate_limit_rate     e.g. 6r/m
 #   host_ssh_port             vault: managed SSH port, for the sshd jail
+#   host_trusted_public_ips   vault: public IPs of our own hosts and AAP, never banned
 #
 # The fail2ban jails are defined below; they hold nothing secret.
 
@@ -22,6 +23,9 @@
   vars:
     host_fail2ban_jails:
       DEFAULT:
+        # Our own hosts and AAP are never banned: a check that proves root
+        # login is refused attempts that login from AAP and must not lock it out.
+        ignoreip: "{{ (['127.0.0.1/8', '::1'] + host_trusted_public_ips) | join(' ') }}"
         bantime: 1h
         findtime: 10m
         banaction: firewallcmd-rich-rules

@@ -6,23 +6,28 @@ and dropping the rest. See [README.md](README.md) for the full picture.
 
 ## What exists today
 
-Six stages:
+Seven stages:
 
-- `playbooks/00-provider-reinstall.yml`, thirteen tasks, reinstalls a confirmed
-  dedicated server with Rocky Linux 9.
+- `playbooks/00-provider-reinstall.yml`, fourteen tasks, reinstalls a confirmed
+  dedicated server with Rocky Linux 9 and removes the managed SSH port from its
+  AAP inventory host.
 - `playbooks/01-deployment-version-assign.yml`, five tasks, takes the next
   deployment version (vXY) from the counter in the private repository and
   writes the number plus one back, adding the assigned version to the list of
   live instances.
 - `playbooks/02-host-dns-publish.yml`, four tasks, publishes the host name for
   that version at GoDaddy and waits until public DNS resolves it.
-- `playbooks/03-rhel-convert.yml`, fourteen tasks, converts Rocky Linux 9 to
+- `playbooks/03-host-access-bootstrap.yml`, nine tasks, creates the `ansible`
+  account, proves its login and sudo, and turns off root and password login
+  minutes after the reinstall.
+- `playbooks/04-rhel-convert.yml`, fourteen tasks, converts Rocky Linux 9 to
   RHEL 9 with `convert2rhel` and proves a Red Hat kernel runs.
-- `playbooks/04-rhel-update.yml`, two tasks, updates all packages and reboots
+- `playbooks/05-rhel-update.yml`, two tasks, updates all packages and reboots
   if anything changed.
-- `playbooks/05-host-setup.yml`, 53 tasks in ten stages, configures the
+- `playbooks/06-host-setup.yml`, 50 tasks in ten stages, configures the
   hypervisor: base, virtualization, SELinux, storage, networks, users,
-  firewall, SSH, web edge and tuning.
+  firewall, SSH (managed port on the public address, port 22 on the internal
+  bridge, port recorded in the AAP inventory), web edge and tuning.
 
 ## Before you run it
 

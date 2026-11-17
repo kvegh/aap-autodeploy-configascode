@@ -43,15 +43,18 @@ Refactored, reviewed and committed:
 
 | Stage | Tasks before | Tasks after |
 |---|---|---|
-| Provider reinstall | 24 | 13 |
+| Provider reinstall | 24 | 14 |
 | Deployment version | 34 | 5 |
 | Host DNS | about 45 | 4 |
+| Host access bootstrap | part of host setup | 9 |
 | Conversion to RHEL | about 120 | 14 |
 | RHEL update | about 20 | 2 |
-| Host setup (10 stages + connection probe) | about 368 | 53 + 6 handlers |
+| Host setup (10 stages) | about 368 | 50 + 6 handlers |
 
-The reinstall stage ends by proving the server presents the host keys the
-provider reports for the last installation. The deployment version stage reads
+The reinstall stage removes `ansible_port` from the target's AAP inventory
+host before the erase, so later jobs reach the rebuilt host on port 22, and
+ends by proving the server presents the host keys the provider reports for the
+last installation. The deployment version stage reads
 the plaintext counter in the private repository, publishes it as
 `autodeploy_deployment_version` and writes the next number back, with the
 assigned version added to the list of live instances, through the GitHub
@@ -59,22 +62,30 @@ contents API. The host DNS stage creates or corrects the name
 `<label>.vXY.<zone>` at GoDaddy and waits until public DNS returns the host
 address. It never deletes names: older versions may still be live instances.
 
+The host access bootstrap runs as root on port 22, minutes after the
+reinstall, because the host is exposed to the internet from the start. It
+creates the `ansible` account (the AAP machine credential user) with its keys
+and passwordless sudo, proves login and sudo as `ansible`, then turns off root,
+password and keyboard-interactive login. Every later stage runs as `ansible`.
+
 The conversion stage updates Rocky Linux, runs `convert2rhel -y` with
 temporary root-only credentials and proves the running kernel is Red Hat's.
 
 The RHEL update stage updates all packages and reboots if anything changed.
 
-The host setup (`05-host-setup.yml`) runs ten stages from `playbooks/host/`:
+The host setup (`06-host-setup.yml`) runs ten stages from `playbooks/host/`:
 base (EPEL, names, timezone, admin tools, hardware monitors), virtualization,
-SELinux (permissive), VM storage, libvirt networks, users with an admin login
-proof, firewall, SSH hardening with a safe move to the managed port, the web
-edge (nginx base, certbot, fail2ban) and tuning. `host-connect.yml` runs first
-in every job that can come before the SSH stage: it uses the managed port if it
-answers, otherwise port 22 as the bootstrap user. File templates live in the
+SELinux (permissive), VM storage, libvirt networks, users, firewall (web ports
+and the managed SSH port open to everyone), SSH, the web edge (nginx base,
+certbot, fail2ban) and tuning. The SSH stage leaves sshd on exactly two
+addresses, the public address on the managed port and the internal libvirt
+bridge on port 22, moves there with a proven safety net, and records the port
+as `ansible_port` on the AAP inventory host, where later jobs read it.
+fail2ban never bans our own public addresses. File templates live in the
 public repository; their values come from the private repository's CaC and
 vault. Use cases add their own nginx vhosts and fail2ban jails.
 
-Not yet started: host setup, retiring old DNS names, image staging. Nothing here has run against a real
+Not yet started: the post-reboot verification, retiring old DNS names, image staging. Nothing here has run against a real
 server yet. The old repositories remain the working implementation until a
 stage has been proven here.
 
@@ -83,7 +94,9 @@ stage has been proven here.
 - Playbooks are `NN-subject-action.yml`, numbered in execution order.
 - Variables use `snake_case` with a prefix naming their source: `robot_` for
   provider API inputs and confirmations, `provider_` for values this automation
-  derives at run time, `counter_` for the deployment counter, `dns_` for the host DNS stage, `rhsm_` for subscription inputs. Registered
+  derives at run time, `counter_` for the deployment counter, `dns_` for the host DNS stage, `rhsm_` for subscription inputs,
+  `host_` for host configuration, `aap_` for the AAP inventory the stages
+  update. Registered
   values carry the stage name, for example `rhel_convert_`. Values published
   for later workflow nodes start with `autodeploy_`.
 - Task names start with a capital and an imperative verb, and say what the task
@@ -103,7 +116,8 @@ assertions are read-only and safe to run at any time.
 ## Layout
 
     playbooks/                one playbook per stage
-    playbooks/host/           host setup stages, imported by 05-host-setup.yml
+    playbooks/host/           host setup stages, imported by 06-host-setup.yml
+    playbooks/vars/           variables shared by more than one stage
     playbooks/host/templates/ file templates (values come from the private repo)
     playbooks/host/files/     static files (public, no secrets)
     collections/  collection requirements
@@ -168,6 +182,16 @@ the installer's other lines); `L071` inline content for the password file;
 `L004` `rpm_key` false positive. Tested by lint, EE syntax check and a render
 test of the firewall rules, sshd settings, jail file and network XML. Not
 executed yet; there is no test host free (the current one runs a live AAP).
+
+Host access bootstrap, SSH listen addresses and inventory port, accepted APME
+findings: `L032`/`L033`/`L101` re-defining `ansible_user` and `ansible_port`
+(the deliberate connection switch), `R108` and `L038` as above. APME cannot
+download `ansible.controller` from public Galaxy and aborts the scan, so the
+scanned copy used its upstream `awx.awx`, which has the same `host` module and
+`controller_api` lookup; lint and the EE syntax check used `ansible.controller`
+4.8.11 itself. Tested by a render test inside the EE of both sshd
+configurations, the fail2ban `ignoreip` line and the inventory variable merge
+and removal (full, port-less and empty host variables). Not executed yet.
 
 Open: `M005` flags a registered value used in a template as possibly untrusted
 on ansible-core 2.19 or later. The same lead appeared for the counter file
