@@ -1,5 +1,26 @@
 # Design decisions history
 
+## Prove the installation finished by matching host keys — 2026-11-17
+
+Decided with the user on 17 November 2026. The old trust stage
+(`wf1-trust.yml`) and prerequisites stage (`wf1-prerequisites.yml`) were
+analysed and dropped entirely, and with them the planned identity stage.
+Standard Ansible and AAP do not pin host keys; AAP jobs run with host key
+checking disabled by default. No known_hosts pinning or key publication is
+therefore carried over.
+
+Instead the reinstall stage ends with three tasks: read the host keys the
+provider reports for the last installation, read the host keys the server
+presents, and assert that both sets of SHA256 fingerprints are equal. The
+rescue system has different host keys, so this also definitively tells the
+rescue system from the finished installation.
+
+`ansible.builtin.uri` is used because no `community.hrobot` module returns the
+host keys of the last installation; the call is read-only.
+`ansible.builtin.shell` runs `ssh-keyscan | ssh-keygen -lf -` because no module
+reads a server's host key without connecting to it. Both run on the
+controller; nothing runs on the managed node.
+
 ## Wait for the provider to consume the installation request — 2026-11-17
 
 Decided with the user on 17 November 2026. The provider installs from its

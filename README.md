@@ -43,9 +43,12 @@ Refactored, reviewed and committed:
 
 | Stage | Tasks before | Tasks after |
 |---|---|---|
-| Provider reinstall | 24 | 10 |
+| Provider reinstall | 24 | 13 |
 
-Not yet started: host identity, deployment version, conversion to RHEL,
+The reinstall stage ends by proving the server presents the host keys the
+provider reports for the last installation.
+
+Not yet started: deployment version, conversion to RHEL,
 updates, host setup, DNS, image staging. Nothing here has run against a real
 server yet. The old repositories remain the working implementation until a
 stage has been proven here.
@@ -97,6 +100,8 @@ Accepted APME deviations:
   listed in the playbook header. `attribute` is a filter argument.
 - `L049` loop variable prefix and `L078` bracket notation: style only; the
   current form is more readable and has no conflicting names.
+- `R101` parameterized command on the host key scan: the only value is the
+  target IP, already asserted and passed through `quote`; runs on the controller.
 
 Open: `M005` flags a registered value used in a template as possibly untrusted
 on ansible-core 2.19 or later. The value is a list of key fingerprints, plain

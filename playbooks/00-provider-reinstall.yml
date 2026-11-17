@@ -19,9 +19,9 @@
 #   robot_confirm_server_ip          must equal robot_expected_server_ip
 #   robot_confirm_erase              must be "ERASE <robot_server_number>"
 #
-# Reaching SSH again does not prove the installation is fresh. The identity
-# stage verifies the changed host keys and machine ID before anything trusts
-# this server.
+# Reaching SSH again does not prove the installation is fresh. The final tasks
+# prove the server presents the host keys the provider reports for the last
+# installation, which only the finished installation has.
 
 - name: Reinstall the confirmed provider server with Rocky Linux 9
   hosts: localhost
@@ -122,3 +122,53 @@
         delay: 120
         timeout: 1800
         search_regex: OpenSSH
+
+    # No community.hrobot module returns the host keys of the last
+    # installation, so the Robot webservice is read directly (read-only).
+    - name: Read the host keys the provider reports for the last installation
+      ansible.builtin.uri:
+        url: "https://robot-ws.your-server.de/boot/{{ robot_server_number | int }}/linux/last"
+        method: GET
+        url_username: "{{ robot_username }}"
+        url_password: "{{ robot_password }}"
+        force_basic_auth: true
+        validate_certs: true
+        return_content: true
+        status_code: 200
+        timeout: 30
+      register: provider_last_install
+      until: provider_last_install.json.linux.host_key | default([]) | length > 0
+      retries: 20
+      delay: 15
+
+    # No Ansible module reads a server's host key without connecting to it.
+    # ssh-keyscan and ssh-keygen run on the controller; nothing runs on the
+    # managed node. The pipe needs a shell.
+    - name: Read the host keys the reinstalled server presents
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          ssh-keyscan -T 10 -p 22 {{ robot_expected_server_ip | quote }} 2>/dev/null
+          | ssh-keygen -lf -
+        executable: /bin/bash
+      changed_when: false
+      register: provider_presented_keys
+      until: >-
+        (provider_presented_keys.stdout_lines | map('split') | map(attribute='1')
+        | map('regex_replace', '^SHA256:', '') | sort | list)
+        == (provider_last_install.json.linux.host_key | map(attribute='key')
+        | map(attribute='fingerprint') | map('regex_replace', '^SHA256:', '') | sort | list)
+      retries: 20
+      delay: 15
+
+    - name: Verify the server presents the freshly installed host keys
+      ansible.builtin.assert:
+        that:
+          - >-
+            (provider_presented_keys.stdout_lines | map('split') | map(attribute='1')
+            | map('regex_replace', '^SHA256:', '') | sort | list)
+            == (provider_last_install.json.linux.host_key | map(attribute='key')
+            | map(attribute='fingerprint') | map('regex_replace', '^SHA256:', '') | sort | list)
+        fail_msg: >-
+          The server does not present the host keys the provider reports for the
+          last installation; the installation may not have finished.
