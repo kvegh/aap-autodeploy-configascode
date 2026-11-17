@@ -81,7 +81,9 @@ assertions are read-only and safe to run at any time.
 |---|---|
 | `ansible-lint --profile production --strict` | pass, 0 failures, 0 warnings |
 | `ansible-playbook --syntax-check` | pass |
-| Checked against the AAP execution environment's ansible-core | not done |
+| Syntax check inside the AAP EE (ansible-core 2.20.10, Python 3.12.15, image `ee-proj-aap-cac@sha256:e6451a10…`) | pass, no deprecation warnings |
+| `reset_type: hardware` valid in community.hrobot 2.8.0 | yes (`software`, `hardware`, `power`, `manual`) |
+| APME scan | not done: not on PyPI, install from source not yet approved |
 | Executed against a real server | not done |
 | AAP job template and end-to-end test | not done |
 

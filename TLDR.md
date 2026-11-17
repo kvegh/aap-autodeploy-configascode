@@ -22,6 +22,6 @@ confirmed dedicated server with Rocky Linux 9.
 
 ## State of verification
 
-Strict lint and syntax check pass. It has never been executed, has no AAP job
-template yet, and has not been checked against the AAP execution environment's
-ansible-core. The previous implementation remains the working one.
+Strict lint and syntax check pass. It also passes a syntax check inside the
+AAP execution environment on ansible-core 2.20.10. It has never been executed
+and has no AAP job template yet. The previous implementation remains the working one.

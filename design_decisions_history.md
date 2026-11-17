@@ -91,6 +91,9 @@ Implementation commit: `6678bd1`.
 Collection requirements name no source, so private automation hub resolves them
 through AAP rather than the repository pinning a public endpoint.
 
-Not yet validated against a real server. Strict lint and a syntax check pass
-against local ansible-core 2.16.19, which is older than the execution
-environment's 2.20; that difference is unverified.
+Not yet validated against a real server. Strict lint passes against local
+ansible-core 2.16.19. A syntax check passes inside the AAP execution
+environment used by the old workflow, `ee-proj-aap-cac` at digest
+`sha256:e6451a10…`, on ansible-core 2.20.10 with Python 3.12.15, with
+deprecation warnings enabled and none reported. `reset_type: hardware` is a
+valid choice in community.hrobot 2.8.0.
