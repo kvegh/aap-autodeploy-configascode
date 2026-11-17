@@ -6,8 +6,13 @@ and dropping the rest. See [README.md](README.md) for the full picture.
 
 ## What exists today
 
-One stage: `playbooks/00-provider-reinstall.yml`, thirteen tasks, reinstalling a
-confirmed dedicated server with Rocky Linux 9.
+Two stages:
+
+- `playbooks/00-provider-reinstall.yml`, thirteen tasks, reinstalls a confirmed
+  dedicated server with Rocky Linux 9.
+- `playbooks/01-deployment-version-assign.yml`, five tasks, takes the next
+  deployment version (vXY) from the counter in the private repository and
+  writes the number plus one back.
 
 ## Before you run it
 
@@ -25,6 +30,6 @@ confirmed dedicated server with Rocky Linux 9.
 
 ## State of verification
 
-Strict lint and syntax check pass. It also passes a syntax check inside the
-AAP execution environment on ansible-core 2.20.10. It has never been executed
-and has no AAP job template yet. The previous implementation remains the working one.
+Strict lint and syntax check pass, also inside the AAP execution environment on
+ansible-core 2.20.10. Neither stage has run for real; the deployment version
+stage has no AAP job template yet. The previous implementation remains the working one.

@@ -1,5 +1,23 @@
 # Design decisions history
 
+## The counter job writes its own counter file — 2026-11-17
+
+Decided with the user on 17 November 2026. The deployment version job reads
+`state/deployment_counter.yml` in the private repository through the GitHub
+contents API, publishes the number as `autodeploy_deployment_version` and
+writes the number plus one back in the same job. It does not hand the number to
+the "Store generated secret" job template: the only-one-writer rule covers
+generated secrets, and the counter is not a secret. One job avoids passing a
+value between workflow nodes, where every failure on 16 November 2026 occurred.
+The cost is that the Git write credential is attached to a second job template.
+
+Five tasks: read the file and its blob SHA, take the number, require 1 to 99
+and the expected line format, write the next number against the read SHA, then
+publish the version. The version is published only after the write succeeded.
+The SHA makes GitHub reject a concurrent change instead of losing an update. A
+rerun after a successful write skips a number, which is harmless. A missing
+file fails the read; the playbook never recreates the counter.
+
 ## Separate secrets from plain CaC definitions — 2026-11-17
 
 Decided with the user on 17 November 2026. Each use case keeps all secrets and
@@ -25,7 +43,7 @@ The deployment counter is plaintext too, in `state/deployment_counter.yml`,
 seeded with 26: v25 was taken by the last deployment and the old counter
 reads 26. The number is public anyway through DNS names, and keeping it plain
 removes the need to expose the vault password to a playbook for re-encryption.
-How the counter job writes it is still to be decided.
+How the counter job writes it was decided later the same day (see above).
 
 ## Prove the installation finished by matching host keys — 2026-11-17
 

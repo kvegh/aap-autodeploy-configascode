@@ -1,0 +1,88 @@
+---
+# Assign the next deployment version (vXY) and advance the counter.
+#
+# The counter is a plaintext file in the private companion repository. This
+# playbook reads it, publishes its number as the deployment version and writes
+# the number plus one back, on the repository's default branch.
+#
+# Required variables, supplied by the job template and the Git write credential:
+#   counter_repository     private repository as owner/name
+#   counter_git_username   GitHub account that owns the token
+#   counter_git_token      token with contents write access to that repository
+#
+# Published for later workflow nodes:
+#   autodeploy_deployment_version   for example v26
+#
+# Rerunning after a successful write assigns the next number; a skipped number
+# is harmless. The write is sent with the file's blob SHA, so a concurrent
+# change makes GitHub reject it instead of losing an update.
+
+- name: Assign the next deployment version
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    counter_api_url: "https://api.github.com/repos/{{ counter_repository }}/contents/state/deployment_counter.yml"
+    counter_line_pattern: '(?m)^autodeploy_deployment_counter_next: [0-9]+$'
+  tasks:
+    - name: Read the counter file and its blob SHA
+      ansible.builtin.uri:
+        url: "{{ counter_api_url }}"
+        method: GET
+        url_username: "{{ counter_git_username }}"
+        url_password: "{{ counter_git_token }}"
+        force_basic_auth: true
+        headers:
+          Accept: application/vnd.github+json
+          X-GitHub-Api-Version: "2022-11-28"
+        return_content: true
+        status_code: 200
+        timeout: 30
+      register: counter_file
+      check_mode: false
+
+    - name: Take the number to assign
+      ansible.builtin.set_fact:
+        counter_text: "{{ counter_file.json.content | b64decode }}"
+        counter_number: "{{ (counter_file.json.content | b64decode | from_yaml).autodeploy_deployment_counter_next }}"
+
+    # Two digits keep the vXY naming. The line check makes sure the write
+    # below replaces exactly the counter and nothing else.
+    - name: Require a two-digit counter in the expected format
+      ansible.builtin.assert:
+        that:
+          - counter_number | int >= 1
+          - counter_number | int <= 99
+          - counter_text is ansible.builtin.regex(counter_line_pattern)
+        fail_msg: The counter file is missing, damaged or past v99.
+
+    - name: Write the next number against the read blob SHA
+      ansible.builtin.uri:
+        url: "{{ counter_api_url }}"
+        method: PUT
+        url_username: "{{ counter_git_username }}"
+        url_password: "{{ counter_git_token }}"
+        force_basic_auth: true
+        headers:
+          Accept: application/vnd.github+json
+          X-GitHub-Api-Version: "2022-11-28"
+        body_format: json
+        body:
+          message: "Assign deployment version v{{ '%02d' | format(counter_number | int) }}"
+          sha: "{{ counter_file.json.sha }}"
+          content: >-
+            {{ counter_text
+            | regex_replace(counter_line_pattern,
+                            'autodeploy_deployment_counter_next: ' ~ (counter_number | int + 1))
+            | b64encode }}
+        status_code: 200
+        timeout: 30
+      changed_when: true
+
+    # Published only after the write succeeded, so a failed write never hands
+    # out a number.
+    - name: Publish the deployment version
+      ansible.builtin.set_stats:
+        data:
+          autodeploy_deployment_version: "v{{ '%02d' | format(counter_number | int) }}"

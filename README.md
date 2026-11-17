@@ -44,11 +44,15 @@ Refactored, reviewed and committed:
 | Stage | Tasks before | Tasks after |
 |---|---|---|
 | Provider reinstall | 24 | 13 |
+| Deployment version | 34 | 5 |
 
 The reinstall stage ends by proving the server presents the host keys the
-provider reports for the last installation.
+provider reports for the last installation. The deployment version stage reads
+the plaintext counter in the private repository, publishes it as
+`autodeploy_deployment_version` and writes the next number back through the
+GitHub contents API.
 
-Not yet started: deployment version, conversion to RHEL,
+Not yet started: conversion to RHEL,
 updates, host setup, DNS, image staging. Nothing here has run against a real
 server yet. The old repositories remain the working implementation until a
 stage has been proven here.
@@ -58,7 +62,8 @@ stage has been proven here.
 - Playbooks are `NN-subject-action.yml`, numbered in execution order.
 - Variables use `snake_case` with a prefix naming their source: `robot_` for
   provider API inputs and confirmations, `provider_` for values this automation
-  derives at run time.
+  derives at run time, `counter_` for the deployment counter. Values published
+  for later workflow nodes start with `autodeploy_`.
 - Task names start with a capital and an imperative verb, and say what the task
   achieves rather than which module it calls.
 
@@ -103,9 +108,17 @@ Accepted APME deviations:
 - `R101` parameterized command on the host key scan: the only value is the
   target IP, already asserted and passed through `quote`; runs on the controller.
 
+- `R105` outbound transfer with parameterized destination (deployment
+  version): the destination is the configured private repository on GitHub.
+
+Deployment version, tested offline only: inside the EE, a simulated contents
+API response built from the real counter file rendered the expected write
+(assigns v26, writes 27, keeps the file comments). The real GitHub read and
+write have not run.
+
 Open: `M005` flags a registered value used in a template as possibly untrusted
-on ansible-core 2.19 or later. The value is a list of key fingerprints, plain
-strings, so this is expected to be harmless; only a real run can confirm it.
+on ansible-core 2.19 or later. The same lead appears for the counter file
+read. The values are plain strings, so this is expected to be harmless; only a real run can confirm it.
 APME's gitleaks, collection health and dependency audit validators did not run.
 
 Review requirements come from
