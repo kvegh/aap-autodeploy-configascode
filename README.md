@@ -83,9 +83,25 @@ assertions are read-only and safe to run at any time.
 | `ansible-playbook --syntax-check` | pass |
 | Syntax check inside the AAP EE (ansible-core 2.20.10, Python 3.12.15, image `ee-proj-aap-cac@sha256:e6451a10…`) | pass, no deprecation warnings |
 | `reset_type: hardware` valid in community.hrobot 2.8.0 | yes (`software`, `hardware`, `power`, `manual`) |
-| APME scan | not done: not on PyPI, install from source not yet approved |
+| APME (commit `9c4372f`, core 2.20; native, opa and ansible validators) | no defects; one lead open, deviations accepted below |
 | Executed against a real server | not done |
 | AAP job template and end-to-end test | not done |
+
+Accepted APME deviations:
+
+- `L081` numbered playbooks: the number is the execution order and is the
+  documented naming convention.
+- `L005` community collection: no certified collection covers the Hetzner Robot
+  API; `community.hrobot` is the maintained one.
+- `L039` possibly undefined variables: supplied by inventory and credentials,
+  listed in the playbook header. `attribute` is a filter argument.
+- `L049` loop variable prefix and `L078` bracket notation: style only; the
+  current form is more readable and has no conflicting names.
+
+Open: `M005` flags a registered value used in a template as possibly untrusted
+on ansible-core 2.19 or later. The value is a list of key fingerprints, plain
+strings, so this is expected to be harmless; only a real run can confirm it.
+APME's gitleaks, collection health and dependency audit validators did not run.
 
 Review requirements come from
 [Agent_generated_code_review](https://github.com/kvegh/Agent_generated_code_review).
