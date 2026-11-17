@@ -1,0 +1,107 @@
+---
+# Reinstall one explicitly confirmed dedicated server with Rocky Linux 9 and
+# wait until it answers on SSH again.
+#
+# This playbook erases the target. It makes no provider write before both the
+# target confirmations and the production exclusion have passed.
+#
+# Required variables, supplied by an encrypted inventory or credential injection:
+#   robot_username, robot_password   provider API account
+#   robot_server_number              provider server number of the target
+#   robot_expected_server_ip         primary IPv4 of the target
+#   robot_protected_server_ips       addresses this playbook must never erase
+#   robot_ssh_keys                   list of {name, public_key} for root login
+#   robot_install_distribution       exact provider image name for Rocky Linux 9
+#   robot_install_language           installer language, for example en
+#
+# Required confirmations, supplied by the job template survey:
+#   robot_confirm_server_number      must equal robot_server_number
+#   robot_confirm_server_ip          must equal robot_expected_server_ip
+#   robot_confirm_erase              must be "ERASE <robot_server_number>"
+#
+# Reaching SSH again does not prove the installation is fresh. The identity
+# stage verifies the changed host keys and machine ID before anything trusts
+# this server.
+
+- name: Reinstall the confirmed provider server with Rocky Linux 9
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  tasks:
+    - name: Query the selected dedicated server
+      community.hrobot.server_info:
+        hetzner_user: "{{ robot_username }}"
+        hetzner_password: "{{ robot_password }}"
+        server_number: "{{ robot_server_number | int }}"
+      register: provider_server
+      check_mode: false
+
+    - name: Verify the provider returned the expected ready server
+      ansible.builtin.assert:
+        that:
+          - provider_server.servers | length == 1
+          - provider_server.servers[0].server_number | int == robot_server_number | int
+          - provider_server.servers[0].server_ip == robot_expected_server_ip
+          - provider_server.servers[0].status == 'ready'
+          - not provider_server.servers[0].cancelled | bool
+        fail_msg: The provider target is not the selected ready server.
+
+    - name: Confirm the exact provider target before erasing it
+      ansible.builtin.assert:
+        that:
+          - robot_confirm_server_number | int == robot_server_number | int
+          - robot_confirm_server_ip == robot_expected_server_ip
+          - robot_confirm_erase == 'ERASE ' ~ (robot_server_number | string)
+        fail_msg: >-
+          Confirm the exact server number, its primary IP and the ERASE phrase
+          before any provider write.
+
+    - name: Reject protected production addresses
+      ansible.builtin.assert:
+        that:
+          - robot_protected_server_ips | length > 0
+          - robot_expected_server_ip not in robot_protected_server_ips
+        fail_msg: The target must not be one of the protected production addresses.
+
+    - name: Register the reviewed SSH public keys
+      community.hrobot.ssh_key:
+        hetzner_user: "{{ robot_username }}"
+        hetzner_password: "{{ robot_password }}"
+        state: present
+        name: "{{ item.name }}"
+        public_key: "{{ item.public_key }}"
+      loop: "{{ robot_ssh_keys }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: provider_keys
+
+    - name: Collect the registered key fingerprints
+      ansible.builtin.set_fact:
+        provider_key_fingerprints: "{{ provider_keys.results | map(attribute='fingerprint') | list }}"
+
+    - name: Arm the Rocky Linux 9 installation for the next boot
+      community.hrobot.boot:
+        hetzner_user: "{{ robot_username }}"
+        hetzner_password: "{{ robot_password }}"
+        server_number: "{{ robot_server_number | int }}"
+        install_linux:
+          dist: "{{ robot_install_distribution }}"
+          lang: "{{ robot_install_language }}"
+          authorized_keys: "{{ provider_key_fingerprints }}"
+
+    - name: Reset the server into the installer
+      community.hrobot.reset:
+        hetzner_user: "{{ robot_username }}"
+        hetzner_password: "{{ robot_password }}"
+        server_number: "{{ robot_server_number | int }}"
+        reset_type: hardware
+
+    - name: Wait for the reinstalled server to answer on SSH
+      ansible.builtin.wait_for:
+        host: "{{ robot_expected_server_ip }}"
+        port: 22
+        state: started
+        delay: 120
+        timeout: 1800
+        search_regex: OpenSSH
