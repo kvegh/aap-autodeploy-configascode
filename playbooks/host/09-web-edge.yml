@@ -20,6 +20,8 @@
   hosts: autodeploy_target
   become: true
   gather_facts: false
+  vars_files:
+    - ../vars/host-services.yml
   vars:
     host_fail2ban_jails:
       DEFAULT:
@@ -118,18 +120,6 @@
         group: root
         mode: "0755"
 
-    - name: Start nginx at boot
-      ansible.builtin.systemd_service:
-        name: nginx
-        enabled: true
-        state: started
-
-    - name: Renew certificates automatically
-      ansible.builtin.systemd_service:
-        name: certbot-renew.timer
-        enabled: true
-        state: started
-
     - name: Install the fail2ban filter for nginx 444 answers
       ansible.builtin.copy:
         src: files/nginx-444.conf
@@ -152,8 +142,11 @@
         - Test the fail2ban configuration
         - Reload fail2ban
 
-    - name: Start fail2ban at boot
+    # The configuration handlers run after all tasks, so starting nginx here
+    # rather than earlier changes nothing.
+    - name: Start nginx, fail2ban and certificate renewal at boot
       ansible.builtin.systemd_service:
-        name: fail2ban
+        name: "{{ item }}"
         enabled: true
         state: started
+      loop: "{{ host_web_edge_services + host_web_edge_timers }}"

@@ -1,0 +1,5 @@
+---
+# SELinux mode the SELinux stage sets and the post-reboot check requires.
+# Permissive on purpose: this is a demo environment (decided 2026-11-17).
+# Setting host_selinux_state in the inventory overrides it for both.
+host_selinux_default_state: permissive

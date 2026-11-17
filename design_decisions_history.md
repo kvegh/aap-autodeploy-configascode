@@ -1,5 +1,40 @@
 # Design decisions history
 
+## Reboot and verify in one playbook, no pre-reboot verify — 2026-11-17
+
+Decided with the user on 17 November 2026, built as
+`playbooks/07-host-reboot-verify.yml`, 15 tasks instead of about 78 (the old
+verify, 66 task lines run twice and counted once, plus the old reboot, 12).
+
+- The verify before the reboot is dropped. Host setup proves login and sudo
+  itself, and every module reports its own success; reading the same state
+  back a minute later adds nothing. Only the run after the reboot shows
+  something new.
+- The final reboot is kept as the real persistence test. Service enablement,
+  the rasdaemon drop-in, sysctl.d, tmpfiles.d, libvirt autostart, the sshd
+  drop-in, permanent firewall rules and the SELinux configuration only take
+  effect at boot. The rasdaemon start race was only visible after a reboot.
+- Reboot and check are one playbook. It runs as `ansible` on the port the SSH
+  stage wrote to the AAP inventory, without a fallback to port 22 or root: a
+  fallback would hide a broken SSH stage.
+- Checks after the boot: SELinux mode, services running and enabled, the
+  certificate renewal timer, libvirt networks and storage pools in their
+  configured state with autostart, sysctl and KSM values, then from the
+  execution environment: ports 80 and 443 answer, port 22 is closed on the
+  public address, and a real root login on the managed port is refused (only
+  "Permission denied" passes; a successful login, a closed port or a timeout
+  fail). The root attempt runs last; our own public addresses are in
+  fail2ban's `ignoreip`, so it cannot get AAP banned.
+- Expected values are shared so setup and check cannot drift: sysctl and KSM
+  values, the services and timers, and the default SELinux mode moved from the
+  setup stages into `playbooks/vars/host-tuning.yml`, `host-services.yml` and
+  `host-selinux.yml`, read by the setup stages and the check. Networks and
+  pools are already inventory variables. The setup stages behave as before;
+  the web edge starts nginx, fail2ban and the renewal timer in one task, so
+  host setup has 48 tasks instead of 50.
+- The 80 GiB free-space check on `/opt` moves to the image download step,
+  where the space is used.
+
 ## Generate an SSH keypair for the ansible account — 2026-11-17
 
 Decided with the user on 17 November 2026.

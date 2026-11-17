@@ -1,0 +1,23 @@
+---
+# Units the setup stages start and enable, and the post-reboot check requires
+# running and enabled after a boot. One definition, so the setup and the check
+# cannot drift apart.
+
+# Base stage: performance history and hardware health monitors.
+host_base_services: [sysstat, smartd, rasdaemon]
+
+# Virtualization stage: RHEL 9's modular libvirt daemons. Their API sockets
+# are derived from these names there.
+host_libvirt_daemons: [virtqemud, virtnetworkd, virtstoraged]
+
+# Web edge stage.
+host_web_edge_services: [nginx, fail2ban]
+host_web_edge_timers: [certbot-renew.timer]
+
+# Every service the check requires. firewalld is started and enabled by the
+# firewall system role.
+host_boot_services: "{{ host_base_services + host_libvirt_daemons + host_web_edge_services + ['firewalld'] }}"
+
+# Oneshot services run at boot and leave no process behind; the check
+# requires them enabled only.
+host_oneshot_services: [sysstat]

@@ -1,0 +1,177 @@
+---
+# Reboot the finished hypervisor and prove that the host setup survives a boot.
+#
+# Host setup writes state that only a boot exercises: service enablement, the
+# rasdaemon drop-in, sysctl.d, tmpfiles.d for KSM, libvirt autostart, the sshd
+# drop-in, permanent firewall rules and the SELinux configuration. Every module
+# reports success at setup time; the rasdaemon start race was only visible
+# after a reboot. There is no check before the reboot: host setup has just
+# proven login and sudo itself.
+#
+# Runs as ansible on the port the SSH stage recorded in the AAP inventory.
+# There is no fallback to port 22 or root: a fallback would hide a broken SSH
+# stage. The reboot module reconnects the same way, so its return already
+# proves the managed login after the boot.
+#
+# Expected values come from the shared files in playbooks/vars/, which the
+# setup stages read too.
+#
+# Required variables:
+#   host_libvirt_networks   as for the libvirt networks stage: name, active, autostart
+#   host_storage_pools      as for the storage stage: name
+#   dns_host_ipv4           vault: public IPv4 of the host
+#   host_ssh_port           vault: managed SSH port
+#   host_selinux_state      optional, as for the SELinux stage
+#
+# Credentials: the machine credential. Its key is also installed for root by
+# the reinstall stage, so a refused root login proves the sshd policy, not a
+# missing key.
+
+- name: Reboot the hypervisor and verify the host setup after the boot
+  hosts: autodeploy_target
+  become: true
+  gather_facts: false
+  vars_files:
+    - vars/host-selinux.yml
+    - vars/host-services.yml
+    - vars/host-tuning.yml
+  tasks:
+    - name: Reboot the host
+      ansible.builtin.reboot:
+        reboot_timeout: 1800
+
+    - name: Read the SELinux mode after the boot
+      ansible.builtin.setup:
+        gather_subset: ['!all', 'min']
+
+    - name: Read the service states
+      ansible.builtin.service_facts:
+
+    - name: Read the libvirt networks
+      community.libvirt.virt_net:
+        command: info
+      register: reboot_verify_networks
+
+    - name: Read the storage pools
+      community.libvirt.virt_pool:
+        command: info
+      register: reboot_verify_pools
+
+    # Sysctl entries carry the sysctl name, KSM entries their /sys path.
+    - name: Read the sysctl and KSM values
+      ansible.builtin.slurp:
+        src: "{{ item.path if 'path' in item else '/proc/sys/' ~ item.name | replace('.', '/') }}"
+      loop: "{{ host_tuning_sysctls + host_ksm_settings }}"
+      loop_control:
+        label: "{{ item.path if 'path' in item else item.name }}"
+      register: reboot_verify_kernel_values
+
+    - name: Require the SELinux mode
+      ansible.builtin.assert:
+        that:
+          - (ansible_facts['selinux']['mode'] | default('disabled')) == (host_selinux_state | default(host_selinux_default_state))
+        fail_msg: SELinux does not run in the configured mode after the boot.
+
+    - name: Require the services running and enabled
+      ansible.builtin.assert:
+        that:
+          - (item ~ '.service') in ansible_facts['services']
+          - ansible_facts['services'][item ~ '.service']['status'] == 'enabled'
+          - ansible_facts['services'][item ~ '.service']['state'] == 'running' or item in host_oneshot_services
+        fail_msg: "{{ item }} is not running and enabled after the boot."
+      loop: "{{ host_boot_services }}"
+
+    # service_facts lists services only. In check mode the module changes
+    # nothing and reports a change if the timer is stopped or disabled.
+    - name: Require the timers active and enabled
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        state: started
+        enabled: true
+      check_mode: true
+      loop: "{{ host_web_edge_timers }}"
+      register: reboot_verify_timers
+      failed_when: reboot_verify_timers is changed
+
+    - name: Require the libvirt networks in their configured state
+      ansible.builtin.assert:
+        that:
+          - item.name in reboot_verify_networks.networks
+          - reboot_verify_networks.networks[item.name].state == ('active' if item.active else 'inactive')
+          - reboot_verify_networks.networks[item.name].autostart == ('yes' if item.autostart else 'no')
+        fail_msg: "Network {{ item.name }} is not in its configured state after the boot."
+      loop: "{{ host_libvirt_networks }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Require the storage pools active and autostarted
+      ansible.builtin.assert:
+        that:
+          - item.name in reboot_verify_pools.pools
+          - reboot_verify_pools.pools[item.name].state == 'active'
+          - reboot_verify_pools.pools[item.name].autostart == 'yes'
+        fail_msg: "Storage pool {{ item.name }} is not active and autostarted after the boot."
+      loop: "{{ host_storage_pools }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Require the sysctl and KSM values
+      ansible.builtin.assert:
+        that:
+          - (item.content | b64decode | trim) == item.item.value
+        fail_msg: "{{ item.source }} does not hold {{ item.item.value }} after the boot."
+      loop: "{{ reboot_verify_kernel_values.results }}"
+      loop_control:
+        label: "{{ item.source }}"
+
+    # The network checks run last and from the execution environment, so they
+    # also prove the permanent firewall rules.
+    - name: Require the web ports to answer from outside
+      ansible.builtin.wait_for:
+        host: "{{ dns_host_ipv4 }}"
+        port: "{{ item }}"
+        state: started
+        timeout: 30
+      loop: [80, 443]
+      delegate_to: localhost
+      become: false
+
+    - name: Require port 22 closed on the public address from outside
+      ansible.builtin.wait_for:
+        host: "{{ dns_host_ipv4 }}"
+        port: 22
+        state: stopped
+        timeout: 10
+      delegate_to: localhost
+      become: false
+
+    # No module proves that a login is refused, so ssh runs in the execution
+    # environment, with the job's key from its SSH agent. Only "Permission
+    # denied" passes: a successful login, a closed port or a timeout fail. Our
+    # own public addresses are in fail2ban's ignoreip (web edge stage), so this
+    # attempt cannot get AAP banned. It runs last.
+    - name: Require root SSH login to be refused
+      ansible.builtin.command:
+        argv:
+          - ssh
+          - -o
+          - BatchMode=yes
+          - -o
+          - StrictHostKeyChecking=no
+          - -o
+          - UserKnownHostsFile=/dev/null
+          - -o
+          - ConnectTimeout=10
+          - -o
+          - LogLevel=ERROR
+          - -p
+          - "{{ host_ssh_port }}"
+          - "root@{{ dns_host_ipv4 }}"
+          - "true"
+      register: reboot_verify_root_login
+      changed_when: false
+      failed_when: >-
+        reboot_verify_root_login.rc != 255
+        or ('root@' ~ dns_host_ipv4 ~ ': Permission denied') not in reboot_verify_root_login.stderr
+      delegate_to: localhost
+      become: false

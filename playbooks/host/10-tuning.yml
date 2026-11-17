@@ -14,6 +14,8 @@
   hosts: autodeploy_target
   become: true
   gather_facts: false
+  vars_files:
+    - ../vars/host-tuning.yml
   handlers:
     - name: Apply the KSM settings now
       ansible.builtin.command:
@@ -27,10 +29,9 @@
         sysctl_file: /etc/sysctl.d/90-hypervisor-vm.conf
         sysctl_set: true
         reload: true
-      loop:
-        - {name: vm.dirty_background_bytes, value: "67108864"}
-        - {name: vm.dirty_bytes, value: "268435456"}
-        - {name: vm.swappiness, value: "10"}
+      loop: "{{ host_tuning_sysctls }}"
+      loop_control:
+        label: "{{ item.name }}"
 
     - name: Share identical memory pages between VMs
       ansible.builtin.copy:
@@ -40,7 +41,7 @@
         mode: "0644"
         content: |
           # Managed by aap-autodeploy-configascode
-          w /sys/kernel/mm/ksm/run - - - - 1
-          w /sys/kernel/mm/ksm/pages_to_scan - - - - 1000
-          w /sys/kernel/mm/ksm/sleep_millisecs - - - - 100
+          {% for item in host_ksm_settings %}
+          w {{ item.path }} - - - - {{ item.value }}
+          {% endfor %}
       notify: Apply the KSM settings now

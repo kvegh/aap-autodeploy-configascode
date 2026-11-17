@@ -6,7 +6,7 @@ and dropping the rest. See [README.md](README.md) for the full picture.
 
 ## What exists today
 
-Seven stages:
+Eight stages:
 
 - `playbooks/00-provider-reinstall.yml`, fourteen tasks, reinstalls a confirmed
   dedicated server with Rocky Linux 9 and removes the managed SSH port from its
@@ -24,10 +24,14 @@ Seven stages:
   RHEL 9 with `convert2rhel` and proves a Red Hat kernel runs.
 - `playbooks/05-rhel-update.yml`, two tasks, updates all packages and reboots
   if anything changed.
-- `playbooks/06-host-setup.yml`, 50 tasks in ten stages, configures the
+- `playbooks/06-host-setup.yml`, 48 tasks in ten stages, configures the
   hypervisor: base, virtualization, SELinux, storage, networks, users,
   firewall, SSH (managed port on the public address, port 22 on the internal
   bridge, port recorded in the AAP inventory), web edge and tuning.
+- `playbooks/07-host-reboot-verify.yml`, fifteen tasks, reboots the host and
+  proves the setup survived the boot: SELinux, services, libvirt networks and
+  pools, kernel values, web ports open, port 22 closed and root login refused
+  from outside. Expected values are shared with the setup stages.
 
 ## Before you run it
 

@@ -9,6 +9,8 @@
   hosts: autodeploy_target
   become: true
   gather_facts: false
+  vars_files:
+    - ../vars/host-services.yml
   vars:
     host_virtualization_packages:
       - qemu-kvm
@@ -18,7 +20,6 @@
       - python3-lxml
       - virt-install
       - guestfs-tools
-    host_libvirt_daemons: [virtqemud, virtnetworkd, virtstoraged]
   tasks:
     - name: Install KVM, libvirt and the image tools
       ansible.builtin.dnf:

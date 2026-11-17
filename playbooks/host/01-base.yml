@@ -15,6 +15,8 @@
   hosts: autodeploy_target
   become: true
   gather_facts: false
+  vars_files:
+    - ../vars/host-services.yml
   vars:
     host_short_name: "{{ dns_host_label }}-{{ autodeploy_deployment_version }}"
     host_fqdn: "{{ dns_host_label }}.{{ autodeploy_deployment_version }}.{{ dns_zone }}"
@@ -110,7 +112,4 @@
         enabled: true
         state: started
         daemon_reload: true
-      loop:
-        - sysstat
-        - smartd
-        - rasdaemon
+      loop: "{{ host_base_services }}"

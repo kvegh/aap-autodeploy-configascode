@@ -49,7 +49,8 @@ Refactored, reviewed and committed:
 | Host access bootstrap | part of host setup | 9 |
 | Conversion to RHEL | about 120 | 14 |
 | RHEL update | about 20 | 2 |
-| Host setup (10 stages) | about 368 | 50 + 6 handlers |
+| Host setup (10 stages) | about 368 | 48 + 6 handlers |
+| Reboot and verify | about 78 | 15 |
 
 The reinstall stage removes `ansible_port` from the target's AAP inventory
 host before the erase, so later jobs reach the rebuilt host on port 22, and
@@ -85,7 +86,21 @@ fail2ban never bans our own public addresses. File templates live in the
 public repository; their values come from the private repository's CaC and
 vault. Use cases add their own nginx vhosts and fail2ban jails.
 
-Not yet started: the post-reboot verification, retiring old DNS names, image staging. Nothing here has run against a real
+The reboot and verify stage (`07-host-reboot-verify.yml`) reboots the finished
+host and proves that the host setup survives a boot: SELinux mode, services
+running and enabled, the certificate renewal timer, libvirt networks and
+storage pools in their configured state with autostart, sysctl and KSM values,
+then from outside: ports 80 and 443 answer, port 22 is closed on the public
+address, and a real root login on the managed port is refused. It runs as
+`ansible` on the inventory port with no fallback to port 22 or root. The old
+workflow ran a separate verify before the reboot as well; it is dropped, since
+host setup proves login and sudo itself and only the run after the reboot
+shows something new. Every value that a setup stage sets and this stage checks
+is defined once in `playbooks/vars/` and read by both.
+
+Not yet started: retiring old DNS names, image staging. The 80 GiB free-space
+check on `/opt` from the old verify is planned for the image download step,
+where the space is used. Nothing here has run against a real
 server yet. The old repositories remain the working implementation until a
 stage has been proven here.
 
@@ -117,7 +132,9 @@ assertions are read-only and safe to run at any time.
 
     playbooks/                one playbook per stage
     playbooks/host/           host setup stages, imported by 06-host-setup.yml
-    playbooks/vars/           variables shared by more than one stage
+    playbooks/vars/           values shared by more than one stage: SSH hardening,
+                              and the services, tuning and SELinux values that the
+                              setup stages set and the post-reboot check expects
     playbooks/host/templates/ file templates (values come from the private repo)
     playbooks/host/files/     static files (public, no secrets)
     collections/  collection requirements
@@ -192,6 +209,20 @@ scanned copy used its upstream `awx.awx`, which has the same `host` module and
 4.8.11 itself. Tested by a render test inside the EE of both sshd
 configurations, the fail2ban `ignoreip` line and the inventory variable merge
 and removal (full, port-less and empty host variables). Not executed yet.
+
+Reboot and verify, accepted APME findings: `R101` parameterized command on the
+root login attempt (the only values are the host address and managed port from
+the inventory, passed as separate arguments; it runs in the execution
+environment), `L005` for `community.libvirt` (no certified collection reads
+libvirt networks and pools), `R108`, `L039`, `L049`, `L078` as above. Also
+reported, on the conversion and update stages: `L012` `state: latest` (a full
+update is the purpose; marked `noqa package-latest`), `L021` file mode on a
+file removal (meaningless for `state: absent`), `R401` an informational list of
+download sources. Tested by lint, EE syntax check and a render test inside the
+EE of every assertion with simulated results, including the root login
+outcome (refused passes; connection refused, timeout and a successful login
+fail), and of the tuning stage's KSM file (byte-identical to before). Not
+executed yet.
 
 Open: `M005` flags a registered value used in a template as possibly untrusted
 on ansible-core 2.19 or later. The same lead appeared for the counter file
