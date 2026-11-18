@@ -122,16 +122,17 @@ inventory port. If at least one image of the CaC list is missing, it first
 requires 80 GiB free on the filesystem that holds `/opt`
 (`images_min_free_gib`); with every image present the check is skipped, so a
 rerun after a complete download does not fail on the space the images use.
-It then installs rclone, writes the Google Drive rclone configuration from the vault (the same Drive access production uses,
-kept on purpose for the demo environment), downloads each image of the CaC
-list `images_download` that is not there yet (`rclone copyto`, `creates:`,
-async with a 30 second poll) and requires the pinned SHA-256 of every image.
+It then installs rclone, writes the Google Drive rclone configuration from
+the AAP credential "Google Drive rclone-NGNG" (the same Drive access
+production uses, kept on purpose for the demo environment), downloads each
+image of the CaC list `images_download` that is not there yet (`rclone
+copyto`, `creates:`, async with a 30 second poll) and requires the pinned SHA-256 of every image.
 A file with a wrong checksum is not deleted automatically: the failure names
 it and says to delete it by hand and run the job again, because a rerun skips
 files that exist. Files keep root ownership and mode 0644; the image
 directories, their SELinux label and owner come from the storage stage, and
 libvirt takes over a VM's disks when it starts. The image list and its
-checksums are required CaC and not yet in the private repository.
+checksums are required CaC in the private repository.
 
 Step 15 of the old host rebuild workflow, the old replacement playbook run on
 its own as the last node, is dropped: it switched on VM network isolation and
@@ -269,8 +270,8 @@ Image download, accepted APME findings: `R101` parameterized command (rclone
 with the remote and destination from the CaC list, passed as separate
 arguments; no rclone module exists); `R114` file changes with a parameterized
 path (the rclone configuration path, fixed in the play); `L071`/`L072` inline
-content without backup (the configuration comes from the vault and is
-rewritten every run); `R108`, `L039`, `L049`, `L078`, `L081` as above. Tested
+content without backup (the configuration comes from the AAP credential
+and is rewritten every run); `R108`, `L039`, `L049`, `L078`, `L081` as above. Tested
 inside the EE against the container itself, with rclone replaced by a stand-in
 that copies a local file and the `dnf` backend stubbed (the EE has no dnf):
 a fresh run downloads both test files and passes the checksums; a rerun

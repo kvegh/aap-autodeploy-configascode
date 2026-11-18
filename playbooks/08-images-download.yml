@@ -16,7 +16,8 @@
 # Required variables:
 #   images_download            CaC list of {remote, dest, sha256}, e.g.
 #                              {remote: 'drive:images/rhel9.qcow2', dest: /opt/vms/rhel9.qcow2, sha256: <64 hex>}
-#   vault_images_rclone_conf   vault: rclone configuration with the Drive remote
+#   images_rclone_conf         rclone configuration with the Drive remote,
+#                              supplied by the "Google Drive rclone-NGNG" credential
 #   images_download_timeout    optional, seconds per image, default 21600;
 #                              must stay below the job template timeout
 #   images_min_free_gib        optional, free GiB required on /opt, default 80
@@ -84,7 +85,7 @@
     # the file when it refreshes the access token.
     - name: Write the Drive access configuration
       ansible.builtin.copy:
-        content: "{{ vault_images_rclone_conf }}"
+        content: "{{ images_rclone_conf }}"
         dest: "{{ images_rclone_config }}"
         owner: root
         group: root

@@ -1,5 +1,20 @@
 # Design decisions history
 
+## Drive access as an AAP credential — 2026-11-18
+
+Decided with the user on 18 November 2026. The Google Drive rclone
+configuration is an AAP credential, never an inventory variable: the
+credential type "Google Drive rclone-NGNG" (one secret, multiline field
+`rclone_conf`) injects it as the extra variable `images_rclone_conf`, and the
+credential "Google Drive rclone-NGNG" holds the value from the vault
+(`vault_images_rclone_conf`). AAP stores it encrypted and hands it only to
+the job that uses the credential. The image download stage reads
+`images_rclone_conf`; playbooks do not read `vault_` names.
+
+The earlier wiring, an inventory variable `vault_images_rclone_conf` read
+directly by the playbook, was a mistake and was corrected before the CaC was
+ever applied.
+
 ## hactar-ng in the AutoDeploy-NGNG inventory — 2026-11-18
 
 Decided with the user on 18 November 2026. The host `hactar-ng` is added to
