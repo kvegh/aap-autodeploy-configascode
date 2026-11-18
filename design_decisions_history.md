@@ -1,5 +1,39 @@
 # Design decisions history
 
+## Image download with pinned checksums, no worker on the host — 2026-11-18
+
+Decided with the user on 17 and 18 November 2026, built as
+`playbooks/08-images-download.yml`, 8 tasks instead of 68 rated items in the
+old download job (3 tasks, two included task files, two filter plugins and a
+bash worker).
+
+- The 80 GiB free-space check on `/opt` lives here, where the space is used.
+  It reads only the mount facts and checks the longest mount point that holds
+  `/opt`, before anything is downloaded. The threshold is
+  `images_min_free_gib`, default 80.
+- rclone is installed here, where the images are pulled, not in host setup.
+- The Drive configuration (`vault_images_rclone_conf`) is the same Drive
+  access production uses. Kept on purpose: this is a demo environment. It is
+  written to `/root/.config/rclone/rclone.conf`, mode 0600, without logging.
+- Each image is downloaded on its own with `rclone copyto`, `creates:` the
+  destination, async with a 30 second poll (`images_download_timeout`,
+  default 21600 seconds per image). No rclone module exists.
+- Every image's SHA-256 is computed and compared with the pin in the CaC list
+  `images_download` (`{remote, dest, sha256}`). A mismatch fails with the file
+  name and the instruction to delete it by hand and rerun, instead of an
+  automatic delete: `creates:` would otherwise skip the corrupt file.
+- No per-file owner or mode. The old worker set `qemu:qemu 0640`; the files
+  now stay root-owned 0644, readable by qemu. The image directories, their
+  `virt_image_t` label and owner come from the storage stage, new files
+  inherit the label, and libvirt's dynamic ownership takes over a VM's disks
+  when it starts.
+- The image list and its checksums are required CaC and are not in the
+  private repository yet.
+- Dropped: the empty-host proof, the restore-manifest resolution, the bash
+  worker on the host, job-ID and marker files, both locks, the
+  save-and-reconnect machinery WF1 never used, and `set_stats`, which had no
+  consumer.
+
 ## Instance retire as a separate job, explicit versions only — 2026-11-17
 
 Decided with the user on 17 November 2026, built as

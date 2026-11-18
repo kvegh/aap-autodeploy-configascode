@@ -1,0 +1,120 @@
+---
+# Download the prebuilt VM images from Google Drive and prove their pinned
+# SHA-256 checksums.
+#
+# Images already present are not downloaded again; every run checks the
+# checksums of all images. The image directories, their virt_image_t label
+# and their owner come from the storage stage; new files inherit the label.
+# No owner or mode is set per file: root-owned 0644 files are readable by
+# qemu, and libvirt's dynamic ownership takes over the disks of a VM when it
+# starts.
+#
+# Runs as ansible on the port the SSH stage recorded in the AAP inventory.
+#
+# Required variables:
+#   images_download            CaC list of {remote, dest, sha256}, e.g.
+#                              {remote: 'drive:images/rhel9.qcow2', dest: /opt/vms/rhel9.qcow2, sha256: <64 hex>}
+#   vault_images_rclone_conf   vault: rclone configuration with the Drive remote
+#   images_download_timeout    optional, seconds per image, default 21600;
+#                              must stay below the job template timeout
+#   images_min_free_gib        optional, free GiB required on /opt, default 80
+
+- name: Download the VM images
+  hosts: autodeploy_target
+  become: true
+  gather_facts: false
+  vars:
+    images_rclone_config: /root/.config/rclone/rclone.conf
+    # /opt and its parents; the longest one that is a mount point holds /opt.
+    images_opt_mount_candidates: [/, /opt]
+    images_opt_mount: >-
+      {{ ansible_facts['mounts']
+         | selectattr('mount', 'in', images_opt_mount_candidates)
+         | sort(attribute='mount') | last }}
+  tasks:
+    - name: Read the mounted filesystems
+      ansible.builtin.setup:
+        gather_subset: ['!all', '!min', 'mounts']
+
+    # Checked before anything is downloaded, where the space is used.
+    - name: Require enough free space on /opt
+      ansible.builtin.assert:
+        that:
+          - images_opt_mount['size_available'] >= (images_min_free_gib | default(80) | int) * 1073741824
+        fail_msg: >-
+          /opt (filesystem mounted at {{ images_opt_mount['mount'] }}) has
+          {{ (images_opt_mount['size_available'] / 1073741824) | round(1) }} GiB free;
+          {{ images_min_free_gib | default(80) }} GiB are required before downloading.
+
+    # EPEL is enabled by the base stage.
+    - name: Install rclone
+      ansible.builtin.dnf:
+        name: rclone
+        state: present
+
+    - name: Create the rclone configuration directory
+      ansible.builtin.file:
+        path: "{{ images_rclone_config | dirname }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    # The same Drive access production uses, kept on purpose: this is a demo
+    # environment (decided 2026-11-18). Written every run; rclone may rewrite
+    # the file when it refreshes the access token.
+    - name: Write the Drive access configuration
+      ansible.builtin.copy:
+        content: "{{ vault_images_rclone_conf }}"
+        dest: "{{ images_rclone_config }}"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+      diff: false
+
+    # No rclone module exists. An existing file is not downloaded again; a
+    # broken one is caught by the checksum check below.
+    - name: Download each missing image
+      ansible.builtin.command:
+        argv:
+          - rclone
+          - --config
+          - "{{ images_rclone_config }}"
+          - copyto
+          - "{{ item.remote }}"
+          - "{{ item.dest }}"
+          - --retries
+          - "8"
+          - --low-level-retries
+          - "20"
+        creates: "{{ item.dest }}"
+      async: "{{ images_download_timeout | default(21600) }}"
+      poll: 30
+      loop: "{{ images_download }}"
+      loop_control:
+        label: "{{ item.dest }}"
+
+    - name: Compute the SHA-256 of each image
+      ansible.builtin.stat:
+        path: "{{ item.dest }}"
+        get_checksum: true
+        checksum_algorithm: sha256
+      loop: "{{ images_download }}"
+      loop_control:
+        label: "{{ item.dest }}"
+      register: images_download_stats
+
+    # A corrupt file is not deleted automatically. Because of creates above, a
+    # rerun would skip it, so it has to be removed by hand.
+    - name: Require the pinned checksums
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.checksum == item.item.sha256 | lower
+        fail_msg: >-
+          {{ item.item.dest }} does not match its pinned SHA-256. Delete the file
+          by hand and run this job again; a rerun skips files that exist.
+      loop: "{{ images_download_stats.results }}"
+      loop_control:
+        label: "{{ item.item.dest }}"

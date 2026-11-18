@@ -6,7 +6,7 @@ and dropping the rest. See [README.md](README.md) for the full picture.
 
 ## What exists today
 
-Eight stages:
+Nine stages:
 
 - `playbooks/00-provider-reinstall.yml`, fourteen tasks, reinstalls a confirmed
   dedicated server with Rocky Linux 9 and removes the managed SSH port from its
@@ -32,6 +32,10 @@ Eight stages:
   proves the setup survived the boot: SELinux, services, libvirt networks and
   pools, kernel values, web ports open, port 22 closed and root login refused
   from outside. Expected values are shared with the setup stages.
+- `playbooks/08-images-download.yml`, eight tasks, requires 80 GiB free on
+  `/opt`, installs rclone, downloads each missing VM image from Google Drive
+  and requires its pinned SHA-256. A corrupt file fails with its name and is
+  deleted by hand before a rerun.
 
 One job outside the deployment workflow, started by hand:
 

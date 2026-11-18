@@ -51,6 +51,7 @@ Refactored, reviewed and committed:
 | RHEL update | about 20 | 2 |
 | Host setup (10 stages) | about 368 | 48 + 6 handlers |
 | Reboot and verify | about 78 | 15 |
+| Image download | 68 | 8 |
 | Instance retire | 69 | 6 |
 
 The reinstall stage removes `ansible_port` from the target's AAP inventory
@@ -116,10 +117,22 @@ certificates, AAP inventory entries, generated secrets, monitoring) adds its
 own cleanup step to this job when it is built. Removing the Red Hat
 registration is a planned follow-up that needs a Red Hat API token.
 
-Not yet started: image staging. The 80 GiB free-space
-check on `/opt` from the old verify is planned for the image download step,
-where the space is used. Nothing here has run against a real
-server yet. The old repositories remain the working implementation until a
+The image download stage (`08-images-download.yml`) runs as `ansible` on the
+inventory port. It first requires 80 GiB free on the filesystem that holds
+`/opt` (`images_min_free_gib`), then installs rclone, writes the Google Drive
+rclone configuration from the vault (the same Drive access production uses,
+kept on purpose for the demo environment), downloads each image of the CaC
+list `images_download` that is not there yet (`rclone copyto`, `creates:`,
+async with a 30 second poll) and requires the pinned SHA-256 of every image.
+A file with a wrong checksum is not deleted automatically: the failure names
+it and says to delete it by hand and run the job again, because a rerun skips
+files that exist. Files keep root ownership and mode 0644; the image
+directories, their SELinux label and owner come from the storage stage, and
+libvirt takes over a VM's disks when it starts. The image list and its
+checksums are required CaC and not yet in the private repository.
+
+Not yet started: the stages after the image download. Nothing here has run
+against a real server yet. The old repositories remain the working implementation until a
 stage has been proven here.
 
 ## Conventions
@@ -243,6 +256,19 @@ EE of every assertion with simulated results, including the root login
 outcome (refused passes; connection refused, timeout and a successful login
 fail), and of the tuning stage's KSM file (byte-identical to before). Not
 executed yet.
+
+Image download, accepted APME findings: `R101` parameterized command (rclone
+with the remote and destination from the CaC list, passed as separate
+arguments; no rclone module exists); `R114` file changes with a parameterized
+path (the rclone configuration path, fixed in the play); `L071`/`L072` inline
+content without backup (the configuration comes from the vault and is
+rewritten every run); `R108`, `L039`, `L049`, `L078`, `L081` as above. Tested
+inside the EE against the container itself, with rclone replaced by a stand-in
+that copies a local file and the `dnf` backend stubbed (the EE has no dnf):
+a fresh run downloads both test files and passes the checksums; a rerun
+downloads nothing and passes; a corrupted file fails the checksum check with
+its name in the message; a free-space requirement larger than the disk fails
+at the first check before any download. Not executed on a host yet.
 
 Instance retire, accepted APME findings: `R105` outbound transfer (the
 configured private repository on GitHub, as for the deployment version);
