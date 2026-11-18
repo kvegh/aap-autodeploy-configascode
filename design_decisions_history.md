@@ -1,5 +1,60 @@
 # Design decisions history
 
+## Managed SSH port set in the host access bootstrap, public NIC detected, hactar-ng as test host — 2026-11-18
+
+Decided with the user on 18 November 2026 (CET; exact time not recorded,
+implemented 15:56 CET). Implementation commit `1593726` (v0.0.28), private
+CaC commit `9abb493` of the companion repository.
+
+- The managed SSH port value is set in the private vault (`host_ssh_port`).
+- The switch to the managed port moves from the SSH stage of the host setup
+  (`playbooks/host/08-sshd.yml`) into `playbooks/03-host-access-bootstrap.yml`,
+  still on Rocky Linux, right after root and password login are turned off.
+  The conversion (in place, keeps the setting), update, host setup, reboot
+  check and image download then run on the managed port. Reason: one port for
+  every stage after the bootstrap, set where the access is created.
+- Kept from the earlier design: the dual-port safety net (22 and the managed
+  port, login and sudo proven on the managed port, then 22 dropped), port 22
+  closed on the public zone only, the managed port open to everyone, the port
+  recorded as `ansible_port` on the AAP inventory host and removed by the
+  reinstall. The bootstrap's job template therefore needs the AAP API
+  credential; the host setup no longer does.
+- Added for Rocky Linux: SELinux enforces on the fresh installation, so the
+  sshd role labels the port `ssh_port_t` (`sshd_manage_selinux`, which calls
+  the certified selinux role) before sshd binds it. Whether firewalld is
+  installed and running on the provider's image is not proven by the old
+  repository or its analyses (the old access step accepted it active or
+  absent, and the old firewall stage installed it), so the bootstrap runs the
+  certified firewall role, which installs, enables and starts it, binds the
+  public interface to the public zone and opens the managed port. Its default
+  public zone keeps ssh open until the proof.
+- In the bootstrap sshd listens on all IPv4 addresses, not on the public
+  address: `net.ipv4.ip_nonlocal_bind` is set only in the host setup, and
+  without it sshd could start at boot before the address is up during the
+  conversion and update reboots.
+- The SSH stage of the host setup keeps what needs the libvirt bridge and the
+  users: `net.ipv4.ip_nonlocal_bind`, the final listen addresses (public
+  address on the managed port, bridge address on 22) and `AllowUsers`; 3 tasks
+  instead of 10. The firewall stage keeps the web ports only. The reboot
+  check is unchanged apart from comments: its checks stay correct. The
+  conversion and update stages make no port assumption; they use the
+  inventory port.
+- `host_public_interface` is dropped. The host has a single NIC; the public
+  interface is the gathered `ansible_facts['default_ipv4']['interface']`,
+  used where the public zone is bound, now in the bootstrap.
+- `net_internal` (bridge, MAC, domain, address, netmask, DHCP range,
+  reservations, DNS hosts, UUID) is copied unchanged from the old hypervisor
+  repository's vault into the private CaC. The source holds no deployment
+  version or a name derived from one; the old per-deployment renaming only
+  added versioned names at run time and is not carried over.
+- The test server for the WF1 end-to-end run is hactar-ng; its current AAP
+  instance may be erased for it.
+
+Open, not decided: `AllowUsers` is applied in the host setup without its own
+login proof (a missing `ansible` entry would only show at the reboot check);
+the SELinux port label is expected to survive the in-place conversion, which
+only a real run can show.
+
 ## Collections resolved only from private automation hub — 2026-11-18
 
 Decided with the user on 18 November 2026 (15:38 CET). The project keeps
