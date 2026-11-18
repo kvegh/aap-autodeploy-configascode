@@ -1,5 +1,28 @@
 # Design decisions history
 
+## Free-space check only when an image is missing — 2026-11-18
+
+Decided with the user on 18 November 2026, in
+`playbooks/08-images-download.yml`, now 9 tasks. A first task reads which
+images of `images_download` already exist (no checksum). The mount facts and
+the 80 GiB check on `/opt` run only if at least one is missing. Before, a
+rerun after a complete download failed, because the downloaded images use
+the 80 GiB the check asks for.
+
+## Old WF1 step 15 dropped — 2026-11-18
+
+Decided with the user on 18 November 2026. Step 15 of the old host rebuild
+workflow ran the old `playbooks/03-replacement.yml` on its own as the last
+node. It is not carried over.
+
+- In the old flow it switched on VM isolation: an nft rule dropped guest
+  traffic leaving the guest bridges, so the VMs could not reach the internet.
+- It made 12 libvirt units depend on that firewall service, so libvirt would
+  not start if the firewall service failed.
+- Its identity step only set facts, which vanish when the job ends.
+- None of it reached Necessity 5 in the review rating; the isolation and the
+  libvirt dependency are harmful in the new design.
+
 ## Image download with pinned checksums, no worker on the host — 2026-11-18
 
 Decided with the user on 17 and 18 November 2026, built as

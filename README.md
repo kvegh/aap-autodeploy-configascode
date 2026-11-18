@@ -51,7 +51,7 @@ Refactored, reviewed and committed:
 | RHEL update | about 20 | 2 |
 | Host setup (10 stages) | about 368 | 48 + 6 handlers |
 | Reboot and verify | about 78 | 15 |
-| Image download | 68 | 8 |
+| Image download | 68 | 9 |
 | Instance retire | 69 | 6 |
 
 The reinstall stage removes `ansible_port` from the target's AAP inventory
@@ -118,9 +118,11 @@ own cleanup step to this job when it is built. Removing the Red Hat
 registration is a planned follow-up that needs a Red Hat API token.
 
 The image download stage (`08-images-download.yml`) runs as `ansible` on the
-inventory port. It first requires 80 GiB free on the filesystem that holds
-`/opt` (`images_min_free_gib`), then installs rclone, writes the Google Drive
-rclone configuration from the vault (the same Drive access production uses,
+inventory port. If at least one image of the CaC list is missing, it first
+requires 80 GiB free on the filesystem that holds `/opt`
+(`images_min_free_gib`); with every image present the check is skipped, so a
+rerun after a complete download does not fail on the space the images use.
+It then installs rclone, writes the Google Drive rclone configuration from the vault (the same Drive access production uses,
 kept on purpose for the demo environment), downloads each image of the CaC
 list `images_download` that is not there yet (`rclone copyto`, `creates:`,
 async with a 30 second poll) and requires the pinned SHA-256 of every image.
@@ -130,6 +132,10 @@ files that exist. Files keep root ownership and mode 0644; the image
 directories, their SELinux label and owner come from the storage stage, and
 libvirt takes over a VM's disks when it starts. The image list and its
 checksums are required CaC and not yet in the private repository.
+
+Step 15 of the old host rebuild workflow, the old replacement playbook run on
+its own as the last node, is dropped: it switched on VM network isolation and
+made libvirt depend on that firewall, which the new design does not want.
 
 Not yet started: the stages after the image download. Nothing here has run
 against a real server yet. The old repositories remain the working implementation until a
@@ -268,7 +274,9 @@ that copies a local file and the `dnf` backend stubbed (the EE has no dnf):
 a fresh run downloads both test files and passes the checksums; a rerun
 downloads nothing and passes; a corrupted file fails the checksum check with
 its name in the message; a free-space requirement larger than the disk fails
-at the first check before any download. Not executed on a host yet.
+at the free-space check before any download when one image is missing, and is
+skipped, with the run passing and downloading nothing, when all images are
+present. Not executed on a host yet.
 
 Instance retire, accepted APME findings: `R105` outbound transfer (the
 configured private repository on GitHub, as for the deployment version);

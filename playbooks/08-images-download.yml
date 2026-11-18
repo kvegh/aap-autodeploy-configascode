@@ -3,7 +3,9 @@
 # SHA-256 checksums.
 #
 # Images already present are not downloaded again; every run checks the
-# checksums of all images. The image directories, their virt_image_t label
+# checksums of all images. The free-space check runs only when at least one
+# image is missing, so a rerun after a complete download does not fail on the
+# space the images use. The image directories, their virt_image_t label
 # and their owner come from the storage stage; new files inherit the label.
 # No owner or mode is set per file: root-owned 0644 files are readable by
 # qemu, and libvirt's dynamic ownership takes over the disks of a VM when it
@@ -31,12 +33,28 @@
       {{ ansible_facts['mounts']
          | selectattr('mount', 'in', images_opt_mount_candidates)
          | sort(attribute='mount') | last }}
+    images_missing: >-
+      {{ images_download_present.results
+         | rejectattr('stat.exists') | list | length > 0 }}
   tasks:
+    - name: Find which images are already present
+      ansible.builtin.stat:
+        path: "{{ item.dest }}"
+        get_checksum: false
+        get_mime: false
+        get_attributes: false
+      loop: "{{ images_download }}"
+      loop_control:
+        label: "{{ item.dest }}"
+      register: images_download_present
+
     - name: Read the mounted filesystems
       ansible.builtin.setup:
         gather_subset: ['!all', '!min', 'mounts']
+      when: images_missing
 
-    # Checked before anything is downloaded, where the space is used.
+    # Checked before anything is downloaded, where the space is used, and only
+    # when something is still to be downloaded.
     - name: Require enough free space on /opt
       ansible.builtin.assert:
         that:
@@ -45,6 +63,7 @@
           /opt (filesystem mounted at {{ images_opt_mount['mount'] }}) has
           {{ (images_opt_mount['size_available'] / 1073741824) | round(1) }} GiB free;
           {{ images_min_free_gib | default(80) }} GiB are required before downloading.
+      when: images_missing
 
     # EPEL is enabled by the base stage.
     - name: Install rclone

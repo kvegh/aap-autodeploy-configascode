@@ -32,9 +32,9 @@ Nine stages:
   proves the setup survived the boot: SELinux, services, libvirt networks and
   pools, kernel values, web ports open, port 22 closed and root login refused
   from outside. Expected values are shared with the setup stages.
-- `playbooks/08-images-download.yml`, eight tasks, requires 80 GiB free on
-  `/opt`, installs rclone, downloads each missing VM image from Google Drive
-  and requires its pinned SHA-256. A corrupt file fails with its name and is
+- `playbooks/08-images-download.yml`, nine tasks, requires 80 GiB free on
+  `/opt` when an image is missing, installs rclone, downloads each missing VM
+  image from Google Drive and requires its pinned SHA-256. A corrupt file fails with its name and is
   deleted by hand before a rerun.
 
 One job outside the deployment workflow, started by hand:
