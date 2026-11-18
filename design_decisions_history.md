@@ -1,5 +1,35 @@
 # Design decisions history
 
+## WF1 credentials carried over from the old repositories — 2026-11-18
+
+The remaining WF1 stage secrets were taken unchanged from the frozen old
+sources and added to the private `env_variables.yml`: the GoDaddy API token,
+the public DNS zone and host label, and the Red Hat subscription organization
+ID and activation key from the old hypervisor repository, and the AAP API
+token the old CaC used for the production AAP. Nothing was regenerated.
+
+Three credentials carry them, each injecting only the variables its stage reads:
+
+- `GoDaddy DNS-NGNG` (custom type of the same name, secret `api_token`,
+  injects `dns_godaddy_token`) for `AutoDeploy-NGNG 02 Host DNS`.
+- `Red Hat Subscription-NGNG` (custom type of the same name, `org_id` and
+  `activation_key`, both secret because the organization ID is an environment
+  detail; injects `rhsm_org_id` and `rhsm_activation_key`) for
+  `AutoDeploy-NGNG 04 RHEL convert`.
+- `AAP API-NGNG` (built-in type `Red Hat Ansible Automation Platform`, host
+  and OAuth token, `verify_ssl` true) for the stages that call
+  `ansible.controller`: `AutoDeploy-NGNG 00 Provider reinstall` and
+  `AutoDeploy-NGNG 06 Host setup` (its SSH step records the managed port).
+
+The DNS stage's non-secret inputs are inventory variables of
+`AutoDeploy-NGNG`: `dns_zone` and `dns_host_label` from vaulted values, and
+`dns_host_ipv4` from the same `vaulted_robot_expected_server_ip` as
+hactar-ng's `ansible_host`, so the address is stored once.
+
+The AAP token belongs to a personal admin token of the old automation and has
+an expiry date; replacing it with a dedicated service account token is a
+follow-up, not part of this change.
+
 ## CaC in the Community of Practice layout, applied by aap-cac-apply.yml — 2026-11-18
 
 Decided with the user on 18 November 2026. The CaC in the private repository
