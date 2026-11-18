@@ -1,5 +1,15 @@
 # Design decisions history
 
+## Collections resolved only from private automation hub — 2026-11-18
+
+Decided with the user on 18 November 2026 (15:38 CET). The project keeps
+`collections/requirements.yml` without a source: every pinned collection and
+its dependencies are added to private automation hub instead, Red Hat
+certified and validated content from the hub's Red Hat remotes and community
+content from Galaxy through the hub's community remote. The list the hub needs
+is `pah_requirements_autodeploy` in the private repository; it is merged into
+the shared hub remotes, never replacing them.
+
 ## WF1 credentials carried over from the old repositories — 2026-11-18
 
 The remaining WF1 stage secrets were taken unchanged from the frozen old
