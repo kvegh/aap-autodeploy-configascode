@@ -46,10 +46,10 @@ Refactored, reviewed and committed:
 | Provider reinstall | 24 | 14 |
 | Deployment version | 34 | 5 |
 | Host DNS | about 45 | 4 |
-| Host access bootstrap | part of host setup | 8 |
+| Host access bootstrap | part of host setup | 16 |
 | Conversion to RHEL | about 120 | 14 |
 | RHEL update | about 20 | 2 |
-| Host setup (10 stages) | about 368 | 47 + 6 handlers |
+| Host setup (10 stages) | about 368 | 40 + 6 handlers |
 | Reboot and verify | about 78 | 15 |
 | Image download | 68 | 9 |
 | Instance retire | 69 | 6 |
@@ -70,7 +70,15 @@ The host access bootstrap runs as root on port 22, minutes after the
 reinstall, because the host is exposed to the internet from the start. It
 creates the `ansible` account (the AAP machine credential user) with its keys
 and passwordless sudo, proves login and sudo as `ansible`, then turns off root,
-password and keyboard-interactive login. Every later stage runs as `ansible`.
+password and keyboard-interactive login. Still on Rocky Linux, it also moves
+SSH to the managed port: the sshd role labels the port `ssh_port_t` (SELinux
+enforces on the fresh installation), the firewall role makes sure firewalld
+runs, binds the public interface (the interface of the default IPv4 route) to
+the public zone and opens the managed port to everyone; sshd listens on port
+22 and the managed port, the run proves login and sudo on the managed port,
+records it as `ansible_port` on the AAP inventory host, then drops port 22 and
+closes it on the public zone. Every later stage runs as `ansible` on the
+managed port; the conversion is in place and keeps it.
 
 The conversion stage updates Rocky Linux, runs `convert2rhel -y` with
 temporary root-only credentials and proves the running kernel is Red Hat's.
@@ -79,12 +87,12 @@ The RHEL update stage updates all packages and reboots if anything changed.
 
 The host setup (`06-host-setup.yml`) runs ten stages from `playbooks/host/`:
 base (EPEL, names, timezone, admin tools, hardware monitors), virtualization,
-SELinux (permissive), VM storage, libvirt networks, users, firewall (web ports
-and the managed SSH port open to everyone), SSH, the web edge (nginx base,
-certbot, fail2ban) and tuning. The SSH stage leaves sshd on exactly two
-addresses, the public address on the managed port and the internal libvirt
-bridge on port 22, moves there with a proven safety net, and records the port
-as `ansible_port` on the AAP inventory host, where later jobs read it.
+SELinux (permissive), VM storage, libvirt networks, users, firewall (web
+ports), SSH, the web edge (nginx base, certbot, fail2ban) and tuning. The SSH
+stage leaves sshd on exactly two addresses, the public address on the managed
+port and the internal libvirt bridge on port 22 (with
+`net.ipv4.ip_nonlocal_bind`, so sshd binds the bridge at boot before libvirt
+creates it), and limits login to the declared accounts.
 fail2ban never bans our own public addresses. File templates live in the
 public repository; their values come from the private repository's CaC and
 vault. Use cases add their own nginx vhosts and fail2ban jails.
@@ -97,8 +105,8 @@ then from outside: ports 80 and 443 answer, port 22 is closed on the public
 address, and a real root login on the managed port is refused. It runs as
 `ansible` on the inventory port with no fallback to port 22 or root. The old
 workflow ran a separate verify before the reboot as well; it is dropped, since
-host setup proves login and sudo itself and only the run after the reboot
-shows something new. Every value that a setup stage sets and this stage checks
+the host access bootstrap proves login and sudo itself and only the run after
+the reboot shows something new. Every value that a setup stage sets and this stage checks
 is defined once in `playbooks/vars/` and read by both.
 
 The instance retire job (`instance-retire.yml`) is not part of any deployment
@@ -278,22 +286,25 @@ deprecation for it. Not executed yet.
 
 Host setup, accepted APME findings: `R108` privilege escalation, `R113`/`R114`/
 `R109` package names, paths and keys from variables (inherent to host setup);
-`L101`/`L033` setting `ansible_user` and `ansible_port` (the deliberate
-connection switch); `L038` unresolved certified roles (APME cannot see them;
+`L038` unresolved certified roles (APME cannot see them;
 ansible-lint and the EE resolve them); `L068` `lineinfile` on `/etc/hosts` (keeps
 the installer's other lines); `L071` inline content for the password file;
 `L004` `rpm_key` false positive. Tested by lint, EE syntax check and a render
 test of the firewall rules, sshd settings, jail file and network XML. Not
-executed yet; there is no test host free (the current one runs a live AAP).
+executed yet. The end-to-end test host is hactar-ng (decided 18 November
+2026); its current AAP instance may be erased for it.
 
-Host access bootstrap, SSH listen addresses and inventory port, accepted APME
-findings: `L032`/`L033`/`L101` re-defining `ansible_user` and `ansible_port`
-(the deliberate connection switch), `R108` and `L038` as above. APME cannot
+Host access bootstrap with the move to the managed port, and the SSH listen
+addresses, accepted APME findings: `L032`/`L033`/`L101` re-defining
+`ansible_user` and `ansible_port` in the bootstrap (the deliberate connection
+switch), `L039` the managed port and AAP inventory name (inventory
+variables), `R108` and `L038` as above. APME cannot
 download `ansible.controller` from public Galaxy and aborts the scan, so the
 scanned copy used its upstream `awx.awx`, which has the same `host` module and
 `controller_api` lookup; lint and the EE syntax check used `ansible.controller`
-4.8.11 itself. Tested by a render test inside the EE of both sshd
-configurations, the fail2ban `ignoreip` line and the inventory variable merge
+4.8.11 itself. Tested by a render test inside the EE of the bootstrap's
+transitional and final sshd settings, the SSH stage's settings, the firewall
+port item, the fail2ban `ignoreip` line and the inventory variable merge
 and removal (full, port-less and empty host variables). Not executed yet.
 
 Reboot and verify, accepted APME findings: `R101` parameterized command on the

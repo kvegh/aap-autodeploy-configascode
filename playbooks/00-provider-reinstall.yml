@@ -70,9 +70,9 @@
           - robot_expected_server_ip not in robot_protected_server_ips
         fail_msg: The target must not be one of the protected production addresses.
 
-    # The SSH stage records the managed port as ansible_port on the target's
-    # AAP inventory host. The reinstalled host answers on port 22 again, so
-    # the port is removed before the erase. This is an AAP write, so it comes
+    # The host access bootstrap records the managed port as ansible_port on
+    # the target's AAP inventory host. The reinstalled host answers on port 22
+    # again, so the port is removed before the erase. This is an AAP write, so it comes
     # after the confirmations. The current host variables are read and the
     # rest written back unchanged.
     - name: Let later jobs reach the reinstalled host on port 22 again

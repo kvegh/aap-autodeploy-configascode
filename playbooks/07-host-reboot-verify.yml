@@ -5,12 +5,13 @@
 # rasdaemon drop-in, sysctl.d, tmpfiles.d for KSM, libvirt autostart, the sshd
 # drop-in, permanent firewall rules and the SELinux configuration. Every module
 # reports success at setup time; the rasdaemon start race was only visible
-# after a reboot. There is no check before the reboot: host setup has just
-# proven login and sudo itself.
+# after a reboot. There is no check before the reboot: the host access
+# bootstrap proved login and sudo on the managed port, and every module
+# reports its own success.
 #
-# Runs as ansible on the port the SSH stage recorded in the AAP inventory.
-# There is no fallback to port 22 or root: a fallback would hide a broken SSH
-# stage. The reboot module reconnects the same way, so its return already
+# Runs as ansible on the port the host access bootstrap recorded in the AAP
+# inventory. There is no fallback to port 22 or root: a fallback would hide a
+# broken SSH setup. The reboot module reconnects the same way, so its return already
 # proves the managed login after the boot.
 #
 # Expected values come from the shared files in playbooks/vars/, which the

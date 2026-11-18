@@ -17,17 +17,19 @@ Nine stages:
   live instances.
 - `playbooks/02-host-dns-publish.yml`, four tasks, publishes the host name for
   that version at GoDaddy and waits until public DNS resolves it.
-- `playbooks/03-host-access-bootstrap.yml`, eight tasks, creates the `ansible`
-  account, proves its login and sudo, and turns off root and password login
-  minutes after the reinstall.
+- `playbooks/03-host-access-bootstrap.yml`, sixteen tasks, creates the
+  `ansible` account, proves its login and sudo, turns off root and password
+  login minutes after the reinstall, and moves SSH to the managed port (SELinux
+  label, firewalld, proof on the new port, port recorded in the AAP inventory,
+  port 22 closed), still on Rocky Linux, so every later stage runs on it.
 - `playbooks/04-rhel-convert.yml`, fourteen tasks, converts Rocky Linux 9 to
   RHEL 9 with `convert2rhel` and proves a Red Hat kernel runs.
 - `playbooks/05-rhel-update.yml`, two tasks, updates all packages and reboots
   if anything changed.
-- `playbooks/06-host-setup.yml`, 47 tasks in ten stages, configures the
+- `playbooks/06-host-setup.yml`, 40 tasks in ten stages, configures the
   hypervisor: base, virtualization, SELinux, storage, networks, users,
-  firewall, SSH (managed port on the public address, port 22 on the internal
-  bridge, port recorded in the AAP inventory), web edge and tuning.
+  firewall (web ports), SSH (managed port on the public address only, port 22
+  on the internal bridge, allowed users), web edge and tuning.
 - `playbooks/07-host-reboot-verify.yml`, fifteen tasks, reboots the host and
   proves the setup survived the boot: SELinux, services, libvirt networks and
   pools, kernel values, web ports open, port 22 closed and root login refused

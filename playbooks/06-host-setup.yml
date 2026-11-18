@@ -29,7 +29,7 @@
 - name: Firewall
   ansible.builtin.import_playbook: host/07-firewall.yml
 
-- name: SSH hardening and port move
+- name: SSH listen addresses and allowed users
   ansible.builtin.import_playbook: host/08-sshd.yml
 
 - name: Web edge

@@ -1,30 +1,57 @@
 ---
-# Create the ansible account and turn off root login, minutes after the
-# reinstall.
+# Create the ansible account, turn off root login and move SSH to the managed
+# port, minutes after the reinstall.
 #
 # The host is exposed to the internet from the moment the provider has
 # installed it, with root login by key on port 22. The previous implementation
 # ran as root through most of its run. This stage runs first: it creates
 # ansible, the user of the AAP machine credential, proves its login and sudo,
 # and only then turns off root, password and keyboard-interactive login. Every
-# later stage runs as ansible.
+# later stage runs as ansible on the managed port.
 #
 # ansible gets passwordless sudo: it logs in by key only, so a sudo password
 # would add little and would have to be stored and injected as one more secret.
 #
-# Required inventory: the host in group autodeploy_target, on port 22. The
-# reinstall stage removes ansible_port from the AAP inventory host.
+# The move to the managed port happens here, still on Rocky Linux, so the
+# conversion, update and setup stages already run on it. The conversion is in
+# place and keeps the setting. sshd first listens on port 22 and the managed
+# port; the run switches to the managed port, proves login plus sudo and
+# records the port in the AAP inventory for later jobs. Only after that does
+# sshd drop port 22 and the firewall close it on the public zone. If the proof
+# fails, port 22 still works and the host can be fixed without a reinstall.
+#
+# sshd listens on all IPv4 addresses here, not on the public address: without
+# net.ipv4.ip_nonlocal_bind, which the SSH stage of the host setup sets, sshd
+# could start at boot before the address is up and listen nowhere. The SSH
+# stage narrows it to the public address and adds the internal bridge.
+#
+# SELinux enforces on the provider's Rocky Linux, so the sshd role labels the
+# managed port ssh_port_t before sshd binds it. firewalld may be missing or
+# stopped on the provider's image; the firewall role installs, enables and
+# starts it, with the managed port open to everyone (the user logs in from
+# changing addresses; key-only login and fail2ban protect it). Its default
+# public zone keeps the ssh service open until the proof.
+#
+# Required inventory: the host in group autodeploy_target. The reinstall stage
+# removes ansible_port from the AAP inventory host, so a fresh host is reached
+# on port 22.
 #
 # The machine credential's SSH key must be one of the keys the reinstall stage
 # installed for root (robot_ssh_keys) and one of the keys listed for ansible.
 #
-# Required variables (vault):
-#   host_authorized_keys   dict: user name -> list of public keys; uses 'ansible'
+# Required variables:
+#   host_authorized_keys   vault: dict user name -> list of public keys; uses 'ansible'
+#   host_ssh_port          vault: managed SSH port
+#   aap_inventory_name     AAP inventory that holds this host under its inventory name
 #   host_bootstrap_user    optional, login of the fresh installation, default
 #                          root. Set it to ansible to rerun this stage once root
-#                          login is off.
+#                          login is off; a rerun connects on the recorded port.
+#
+# Credentials: the machine credential, and the standard Red Hat Ansible
+# Automation Platform credential, which hands the controller URL and login to
+# ansible.controller as environment variables.
 
-- name: Create the ansible account and turn off root login
+- name: Create the ansible account, turn off root login and move SSH to the managed port
   hosts: autodeploy_target
   become: true
   # The machine credential logs in as ansible, which does not exist yet on a
@@ -32,6 +59,7 @@
   # play alone starts as root; the tasks below switch it to ansible.
   vars:
     ansible_user: "{{ host_bootstrap_user | default('root') }}"
+    host_sshd_bootstrap_settings: "{{ host_sshd_hardening | combine({'Port': host_ssh_port | int}) }}"
   vars_files:
     - vars/sshd-hardening.yml
   tasks:
@@ -70,12 +98,78 @@
     - name: Prove the ansible login and sudo
       ansible.builtin.ping:
 
-    - name: Turn off root, password and keyboard-interactive login
+    - name: Run firewalld with the managed SSH port open
+      ansible.builtin.include_role:
+        name: redhat.rhel_system_roles.firewall
+      vars:
+        firewall:
+          - zone: public
+            interface: "{{ ansible_facts['default_ipv4']['interface'] }}"
+            state: enabled
+            permanent: true
+            runtime: true
+          - zone: public
+            port: "{{ host_ssh_port }}/tcp"
+            state: enabled
+            permanent: true
+            runtime: true
+
+    # Port is only read by the role to label the managed port ssh_port_t in
+    # SELinux; each ListenAddress carries its own port.
+    - name: Turn off root and password login, listen on port 22 and the managed port
       ansible.builtin.include_role:
         name: redhat.rhel_system_roles.sshd
       vars:
         sshd_config_file: "{{ host_sshd_config_file }}"
-        sshd_config: "{{ host_sshd_hardening }}"
+        sshd_manage_selinux: true
+        sshd_config: >-
+          {{ host_sshd_bootstrap_settings | combine({'ListenAddress':
+          ['0.0.0.0:22', '0.0.0.0:' ~ host_ssh_port]}) }}
 
-    - name: Apply the SSH configuration now
+    - name: Apply the transitional SSH configuration now
       ansible.builtin.meta: flush_handlers
+
+    - name: Switch this run to the managed port
+      ansible.builtin.set_fact:
+        ansible_port: "{{ host_ssh_port | int }}"
+
+    - name: Reconnect on the managed port
+      ansible.builtin.meta: reset_connection
+
+    - name: Prove login and sudo on the managed port
+      ansible.builtin.ping:
+
+    # Later jobs read the port from the inventory instead of probing for it.
+    # The current host variables are read and merged, so nothing else is lost.
+    # The reinstall stage removes the port again.
+    - name: Record the managed port in the AAP inventory
+      ansible.controller.host:
+        name: "{{ inventory_hostname }}"
+        inventory: "{{ aap_inventory_name }}"
+        variables: "{{ aap_host_variables | combine({'ansible_port': host_ssh_port | int}) }}"
+      vars:
+        aap_host_variables: >-
+          {{ (lookup('ansible.controller.controller_api', 'hosts', expect_one=true,
+          query_params={'name': inventory_hostname, 'inventory__name': aap_inventory_name}).variables
+          | from_yaml) | default({}, true) }}
+      delegate_to: localhost
+      become: false
+
+    - name: Listen on the managed port only
+      ansible.builtin.include_role:
+        name: redhat.rhel_system_roles.sshd
+      vars:
+        sshd_config_file: "{{ host_sshd_config_file }}"
+        sshd_manage_selinux: true
+        sshd_config: "{{ host_sshd_bootstrap_settings | combine({'ListenAddress': ['0.0.0.0:' ~ host_ssh_port]}) }}"
+
+    - name: Apply the final SSH configuration now
+      ansible.builtin.meta: flush_handlers
+
+    - name: Close port 22 on the public zone
+      ansible.posix.firewalld:
+        service: ssh
+        zone: public
+        state: disabled
+        permanent: true
+        immediate: true

@@ -4,8 +4,8 @@
 # Permissive on purpose: this is a demo environment (decided 2026-11-17). The
 # booleans and directory labels are still set, so switching to enforcing later
 # only means changing host_selinux_state. The default mode is shared with the
-# post-reboot check. The SSH port label is set by the SSH stage, where the port
-# is configured.
+# post-reboot check. The SSH port label is set by the host access bootstrap,
+# where the port is configured.
 
 - name: Configure SELinux
   hosts: autodeploy_target

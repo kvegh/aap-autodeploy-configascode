@@ -1,37 +1,24 @@
 ---
-# firewalld: public interface, web ports and the managed SSH port.
+# firewalld: web ports.
 #
-# The managed SSH port is open to everyone: the user logs in from changing
-# addresses. Key-only login and fail2ban protect it.
-#
-# Port 22 (the ssh service) stays open here on purpose. The SSH stage closes it
-# on the public zone after it has proven login on the managed port; closing it
-# earlier would cut new connections before sshd moves.
+# The host access bootstrap already runs firewalld, binds the public interface
+# to the public zone, opens the managed SSH port and closes port 22 there.
+# This stage adds the web ports.
 #
 # The role adds the listed rules; it does not remove rules dropped from this
 # list. Handling removals in CaC is a separate project to-do.
-#
-# Required variables:
-#   host_public_interface     vault: public network interface name
-#   host_ssh_port             vault: managed SSH port
 
 - name: Configure the firewall
   hosts: autodeploy_target
   become: true
   tasks:
-    - name: Configure firewalld
+    - name: Open the web ports
       ansible.builtin.include_role:
         name: redhat.rhel_system_roles.firewall
       vars:
         firewall:
           - zone: public
-            interface: "{{ host_public_interface }}"
-            state: enabled
-            permanent: true
-            runtime: true
-          - zone: public
             service: [http, https]
-            port: "{{ host_ssh_port }}/tcp"
             state: enabled
             permanent: true
             runtime: true
