@@ -1,5 +1,60 @@
 # Design decisions history
 
+## CaC in the Community of Practice layout, applied by aap-cac-apply.yml — 2026-11-18
+
+Decided with the user on 18 November 2026. The CaC in the private repository
+uses the layout, variable names and secret convention of the Ansible
+Community of Practice (CoP) collections `infra.aap_configuration` and
+`infra.aap_configuration_extended`, at the latest versions 4.11.1 and 4.13.1.
+Where a layout or naming choice comes up, the CoP defaults win over earlier
+conventions of this project.
+
+Why: the CoP export (`filetree_create`) and the CoP apply (`filetree_read`
+followed by `dispatch`) then use the same tree and the same names, so an
+export of the live AAP compares one to one with the repository, and the
+standard CoP tooling, including `object_diff` for removing objects that are no
+longer in the CaC, works without translation.
+
+It supersedes two earlier decisions: the `_<use case>` suffix on CaC
+variables (now plain CoP names such as `controller_credentials` and
+`controller_templates`, the name `dispatch` reads for job templates) and the
+`vault_` prefix (now `vaulted_`).
+
+The tree: each use case is one directory, `usecases/<use case>/`, laid out as
+`filetree_create` writes it with `omit_id: true`.
+Organization-less objects (credential types) are files at its root;
+everything else is under `<organization>/controller_<type>.d/`, one file per
+object named after it, with inventories, hosts and groups in a subdirectory
+per inventory. `filetree_read` reads it with
+`controller_configuration_filetree_read_layout: create` and `dir_orgs_vars`
+set to the use case directory. That role takes one root per run, so use cases
+stay separate and are applied one at a time. Only `autodeploy` exists today.
+
+Secrets: one vault-encrypted `env_variables.yml` per use case, the CoP env
+variables file, holding `vaulted_*` values. Credential inputs use the name
+`filetree_create` generates, `vaulted_controller_credentials_<credential
+name>_<input>`; values that feed inventory variables keep a short name with
+the new prefix (`vaulted_robot_expected_server_ip`). The values were carried
+over unchanged; only the names changed. `secrets_vault.yml` is gone.
+
+`pah_requirements_autodeploy` stays as it is, in `pah_requirements.yml` at the
+use case root. It is not a CoP variable: the PAH stage of
+`aap_autodeploy_configascode` reads `pah_requirements_<use case>` and merges
+it into shared hub remotes, while the CoP `hub_collection_remotes` would
+replace a remote's whole requirements list. `state/deployment_counter.yml`
+stays where it is; the counter playbooks read that path.
+
+The apply job is the public repository's `playbooks/aap-cac-apply.yml`,
+unnumbered and started by hand. It downloads the private repository as a
+GitHub API tarball (`cac_repository`, `cac_repository_ref`) with the existing
+"GitHub Counter Writer-NGNG" credential, because an AAP job only sees its own
+project; on the command line `cac_repository_path` points at a checkout
+instead. The vault password comes from an AAP vault credential, the AAP
+connection from a "Red Hat Ansible Automation Platform" credential. The
+playbook sets `aap_hostname` and `aap_validate_certs` from `AAP_*` or
+`CONTROLLER_*` environment variables, because the CoP version check reads
+only the `AAP_*` names.
+
 ## Drive access as an AAP credential — 2026-11-18
 
 Decided with the user on 18 November 2026. The Google Drive rclone

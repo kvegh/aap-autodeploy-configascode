@@ -15,3 +15,9 @@ collections:
     version: 2.4.0
   - name: ansible.controller
     version: 4.8.11
+  # CoP collections for playbooks/aap-cac-apply.yml. They depend on
+  # ansible.platform and ansible.hub, which come from the same hub.
+  - name: infra.aap_configuration
+    version: 4.11.1
+  - name: infra.aap_configuration_extended
+    version: 4.13.1

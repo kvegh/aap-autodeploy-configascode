@@ -148,12 +148,14 @@ stage has been proven here.
 
 - Playbooks are `NN-subject-action.yml`, numbered in execution order. Jobs
   outside the deployment workflow, started by hand, are unnumbered
-  (`instance-retire.yml`).
+  (`instance-retire.yml`, `aap-cac-apply.yml`).
 - Variables use `snake_case` with a prefix naming their source: `robot_` for
   provider API inputs and confirmations, `provider_` for values this automation
   derives at run time, `counter_` for the deployment counter, `dns_` for the host DNS stage, `rhsm_` for subscription inputs,
   `host_` for host configuration, `aap_` for the AAP inventory the stages
-  update, `retire_` for the instance retire job. Registered
+  update, `retire_` for the instance retire job, `cac_` for the CaC apply
+  job. Variables the CoP roles define keep their CoP names (`dir_orgs_vars`,
+  `aap_hostname`). Registered
   values carry the stage name, for example `rhel_convert_`. Values published
   for later workflow nodes start with `autodeploy_`.
 - Task names start with a capital and an imperative verb, and say what the task
@@ -181,12 +183,54 @@ assertions are read-only and safe to run at any time.
     playbooks/host/files/     static files (public, no secrets)
     collections/  collection requirements
 
+## Applying the CaC
+
+`playbooks/aap-cac-apply.yml` applies the CaC of one use case (`cac_usecase`,
+default `autodeploy`) with the Ansible Community of Practice collections
+`infra.aap_configuration` 4.11.1 and `infra.aap_configuration_extended`
+4.13.1. The private repository holds each use case as the tree the CoP export
+`filetree_create` writes, under `usecases/<use case>/`; the playbook loads its
+encrypted `env_variables.yml`, reads the tree with `filetree_read`
+(`controller_configuration_filetree_read_layout: create`) and applies it with
+`dispatch`. Export and apply therefore use the same layout and variable names.
+
+What the job template needs:
+
+- **Private repository.** An AAP job sees only its own project, so a second
+  AAP project for the private repository is no use. The playbook downloads
+  the repository itself: the GitHub contents API tarball of `cac_repository`
+  (owner/name) at `cac_repository_ref` (default `main`), with the account and
+  token of the existing credential "GitHub Counter Writer-NGNG"
+  (`counter_git_username`, `counter_git_token`), into a scratch directory it
+  removes at the end. On the command line, `cac_repository_path` points at a
+  local checkout instead and nothing is downloaded.
+- **Vault password.** An AAP vault credential with the private repository's
+  vault password; AAP passes it to `ansible-playbook`, which decrypts
+  `env_variables.yml`.
+- **AAP connection.** A "Red Hat Ansible Automation Platform" credential. The
+  `ansible.controller` modules take the login from its environment variables
+  (`CONTROLLER_*`, `AAP_*` or `TOWER_*`). The playbook sets `aap_hostname` and
+  `aap_validate_certs` from `AAP_HOSTNAME`/`AAP_VALIDATE_CERTS` or
+  `CONTROLLER_HOST`/`CONTROLLER_VERIFY_SSL`, because the CoP version check
+  reads only the `AAP_*` names and otherwise targets 127.0.0.1.
+- **Collections.** `dispatch` always runs the CoP version check, which uses
+  `ansible.platform`; it and `ansible.hub` are dependencies of the CoP
+  collections and come from private automation hub with them.
+
+Command line example:
+
+    ansible-playbook playbooks/aap-cac-apply.yml \
+      -e cac_repository_path=../aap-autodeploy-configascode-secrets \
+      --vault-password-file <file>
+
 ## Verification
 
 | Check | Result |
 |---|---|
 | `ansible-lint --profile production --strict` | pass, 0 failures, 0 warnings |
 | `ansible-playbook --syntax-check` | pass |
+| CaC apply: `filetree_read` of the private tree inside the EE (CoP 4.11.1 / 4.13.1) | object counts equal the previous CaC files; vaulted references render; `!unsafe` templates stay literal |
+| CaC apply: run without network, AAP address pointed at a closed port | reads and decrypts the tree, stops at the CoP version check before any change |
 | Syntax check inside the AAP EE (ansible-core 2.20.10, Python 3.12.15, image `ee-proj-aap-cac@sha256:e6451a10…`) | pass, no deprecation warnings |
 | `reset_type: hardware` valid in community.hrobot 2.8.0 | yes (`software`, `hardware`, `power`, `manual`) |
 | APME (commit `9c4372f`, core 2.20; native, opa and ansible validators) | no defects; one lead open, deviations accepted below |

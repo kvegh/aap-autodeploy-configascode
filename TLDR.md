@@ -37,12 +37,15 @@ Nine stages:
   image from Google Drive and requires its pinned SHA-256. A corrupt file fails with its name and is
   deleted by hand before a rerun.
 
-One job outside the deployment workflow, started by hand:
+Two jobs outside the deployment workflow, started by hand:
 
 - `playbooks/instance-retire.yml`, six tasks, retires the versions named in
   its survey: deletes every A record with the version as a label and removes
   the versions from the live list. Every later stage that creates something
   per instance adds its own cleanup step here.
+- `playbooks/aap-cac-apply.yml` applies the CaC of one use case from the
+  private repository to AAP with the Community of Practice collections
+  (`filetree_read`, then `dispatch`). Not run against AAP yet.
 
 ## Before you run it
 

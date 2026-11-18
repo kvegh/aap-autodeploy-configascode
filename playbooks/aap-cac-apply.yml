@@ -1,0 +1,98 @@
+---
+# Apply the CaC of one use case to AAP with the Ansible Community of Practice
+# (CoP) collections: infra.aap_configuration_extended.filetree_read loads the
+# use case tree from the private repository, infra.aap_configuration.dispatch
+# applies it. Started by hand, from a job template or the command line.
+#
+# Inputs:
+#   cac_usecase            use case directory under usecases/ (default autodeploy)
+#   cac_repository_path    local checkout of the private repository; when set,
+#                          nothing is downloaded (command line runs)
+#   cac_repository         private repository as owner/name, for the download
+#   cac_repository_ref     branch, tag or commit to download (default main)
+#   counter_git_username   GitHub account and token that can read the private
+#   counter_git_token      repository, from the "GitHub Counter Writer-NGNG"
+#                          credential
+#
+# AAP connection: from the "Red Hat Ansible Automation Platform" credential's
+# environment variables. The ansible.controller modules read the login
+# (CONTROLLER_USERNAME/CONTROLLER_PASSWORD or CONTROLLER_OAUTH_TOKEN, also as
+# AAP_* or TOWER_*) themselves. aap_hostname and aap_validate_certs are set
+# here from AAP_HOSTNAME/AAP_VALIDATE_CERTS or CONTROLLER_HOST/
+# CONTROLLER_VERIFY_SSL, because the CoP version check reads only the AAP_*
+# names and otherwise falls back to 127.0.0.1.
+#
+# Vault: env_variables.yml of the use case is encrypted. A job template gets
+# the vault password from an AAP vault credential, the command line from
+# --vault-password-file or --ask-vault-pass.
+
+- name: Apply the CaC of one use case
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    cac_usecase: autodeploy
+    cac_repository_ref: main
+    controller_configuration_filetree_read_layout: create
+    aap_configuration_secure_logging: true
+    aap_hostname: "{{ lookup('ansible.builtin.env', 'AAP_HOSTNAME') or lookup('ansible.builtin.env', 'CONTROLLER_HOST') }}"
+    aap_validate_certs: >-
+      {{ (lookup('ansible.builtin.env', 'AAP_VALIDATE_CERTS')
+          or lookup('ansible.builtin.env', 'CONTROLLER_VERIFY_SSL') or 'true') | bool }}
+  tasks:
+    - name: Apply the use case and remove the downloaded copy afterwards
+      block:
+        - name: Download the private repository when no local checkout is given
+          when: cac_repository_path is not defined
+          block:
+            - name: Create a scratch directory for the private repository
+              ansible.builtin.tempfile:
+                state: directory
+                suffix: .cac
+              register: cac_scratch
+
+            - name: Download the private repository at the requested ref
+              ansible.builtin.get_url:
+                url: "https://api.github.com/repos/{{ cac_repository }}/tarball/{{ cac_repository_ref }}"
+                dest: "{{ cac_scratch.path }}/repository.tar.gz"
+                url_username: "{{ counter_git_username }}"
+                url_password: "{{ counter_git_token }}"
+                force_basic_auth: true
+                headers:
+                  Accept: application/vnd.github+json
+                  X-GitHub-Api-Version: "2022-11-28"
+                mode: "0600"
+                timeout: 60
+
+            - name: Unpack the private repository
+              ansible.builtin.unarchive:
+                src: "{{ cac_scratch.path }}/repository.tar.gz"
+                dest: "{{ cac_scratch.path }}"
+                remote_src: true
+                extra_opts:
+                  - --strip-components=1
+
+        - name: Point filetree_read at the use case tree
+          ansible.builtin.set_fact:
+            dir_orgs_vars: "{{ cac_repository_path if cac_repository_path is defined else cac_scratch.path }}/usecases/{{ cac_usecase }}"
+
+        - name: Load the encrypted env variables of the use case
+          ansible.builtin.include_vars:
+            file: "{{ dir_orgs_vars }}/env_variables.yml"
+          no_log: true
+
+        - name: Read the use case tree
+          ansible.builtin.include_role:
+            name: infra.aap_configuration_extended.filetree_read
+
+        - name: Apply the use case to AAP
+          ansible.builtin.include_role:
+            name: infra.aap_configuration.dispatch
+
+      always:
+        - name: Remove the downloaded copy of the private repository
+          ansible.builtin.file:
+            path: "{{ cac_scratch.path }}"
+            state: absent
+          when: cac_scratch.path is defined
