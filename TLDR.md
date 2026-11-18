@@ -33,6 +33,13 @@ Eight stages:
   pools, kernel values, web ports open, port 22 closed and root login refused
   from outside. Expected values are shared with the setup stages.
 
+One job outside the deployment workflow, started by hand:
+
+- `playbooks/instance-retire.yml`, six tasks, retires the versions named in
+  its survey: deletes every A record with the version as a label and removes
+  the versions from the live list. Every later stage that creates something
+  per instance adds its own cleanup step here.
+
 ## Before you run it
 
 - **It erases the target server.** There is no undo.

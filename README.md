@@ -51,6 +51,7 @@ Refactored, reviewed and committed:
 | RHEL update | about 20 | 2 |
 | Host setup (10 stages) | about 368 | 48 + 6 handlers |
 | Reboot and verify | about 78 | 15 |
+| Instance retire | 69 | 6 |
 
 The reinstall stage removes `ansible_port` from the target's AAP inventory
 host before the erase, so later jobs reach the rebuilt host on port 22, and
@@ -61,7 +62,8 @@ the plaintext counter in the private repository, publishes it as
 assigned version added to the list of live instances, through the GitHub
 contents API. The host DNS stage creates or corrects the name
 `<label>.vXY.<zone>` at GoDaddy and waits until public DNS returns the host
-address. It never deletes names: older versions may still be live instances.
+address. It never deletes names: older versions may still be live instances;
+the instance retire job removes them.
 
 The host access bootstrap runs as root on port 22, minutes after the
 reinstall, because the host is exposed to the internet from the start. It
@@ -98,7 +100,23 @@ host setup proves login and sudo itself and only the run after the reboot
 shows something new. Every value that a setup stage sets and this stage checks
 is defined once in `playbooks/vars/` and read by both.
 
-Not yet started: retiring old DNS names, image staging. The 80 GiB free-space
+The instance retire job (`instance-retire.yml`) is not part of any deployment
+workflow. Several instances may be live at once, so a person names the
+versions to retire in its survey, for example `v24, v25`. Only versions in the
+live list are accepted, never the counter's next number. Everything an
+instance owns is found by the version in its name, without a separate
+registry. It deletes every A record in the zone that has the version as a
+whole label (`hactar.v24`, `aap.v24`, never `hactar.v240`), then removes the
+versions from the live list with the same SHA-guarded write as the deployment
+version stage. DNS goes first, so a failed delete leaves the version live and
+a rerun finds its names again. After a reinstall the previous version stays
+live and in DNS until it is retired by hand; this is intended. Extension rule:
+every later stage that creates something per instance (VMs, vhosts,
+certificates, AAP inventory entries, generated secrets, monitoring) adds its
+own cleanup step to this job when it is built. Removing the Red Hat
+registration is a planned follow-up that needs a Red Hat API token.
+
+Not yet started: image staging. The 80 GiB free-space
 check on `/opt` from the old verify is planned for the image download step,
 where the space is used. Nothing here has run against a real
 server yet. The old repositories remain the working implementation until a
@@ -106,12 +124,14 @@ stage has been proven here.
 
 ## Conventions
 
-- Playbooks are `NN-subject-action.yml`, numbered in execution order.
+- Playbooks are `NN-subject-action.yml`, numbered in execution order. Jobs
+  outside the deployment workflow, started by hand, are unnumbered
+  (`instance-retire.yml`).
 - Variables use `snake_case` with a prefix naming their source: `robot_` for
   provider API inputs and confirmations, `provider_` for values this automation
   derives at run time, `counter_` for the deployment counter, `dns_` for the host DNS stage, `rhsm_` for subscription inputs,
   `host_` for host configuration, `aap_` for the AAP inventory the stages
-  update. Registered
+  update, `retire_` for the instance retire job. Registered
   values carry the stage name, for example `rhel_convert_`. Values published
   for later workflow nodes start with `autodeploy_`.
 - Task names start with a capital and an imperative verb, and say what the task
@@ -223,6 +243,23 @@ EE of every assertion with simulated results, including the root login
 outcome (refused passes; connection refused, timeout and a successful login
 fail), and of the tuning stage's KSM file (byte-identical to before). Not
 executed yet.
+
+Instance retire, accepted APME findings: `R105` outbound transfer (the
+configured private repository on GitHub, as for the deployment version);
+`L033` re-defined variables (the `counter_` facts carry the same names and
+meaning as in the deployment version stage, in a separate play); `L051` Jinja
+spacing, a false positive on the `|` alternation inside the regular
+expression string, gone when that string is removed; `L039`, `L049`, `L078` as
+above; `M005` as the open lead below. Tested inside the EE against local
+stand-ins for the GitHub contents API and GoDaddy: retiring `v24` deletes
+`hactar.v24`, `aap.v24`, `v24` and `HACTAR.V24` but not `hactar.v240`,
+`v240.hactar` or `hactar.v24x`, and writes the live list without it, comments
+and the counter line unchanged, against the read SHA; `24 ,V25` is normalised
+to `v24, v25`; a live version without a record deletes nothing and still
+updates the list; a version not live, the next number, a malformed or an empty
+input, and a rerun after a successful retire fail at the assertion before any
+write; a multi-page record list fails before any delete. The real GoDaddy and
+GitHub calls have not run.
 
 Open: `M005` flags a registered value used in a template as possibly untrusted
 on ansible-core 2.19 or later. The same lead appeared for the counter file

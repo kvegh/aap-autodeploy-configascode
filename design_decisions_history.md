@@ -1,5 +1,36 @@
 # Design decisions history
 
+## Instance retire as a separate job, explicit versions only — 2026-11-17
+
+Decided with the user on 17 November 2026, built as
+`playbooks/instance-retire.yml`, 6 tasks instead of 69 rated task lines in the
+old host DNS retire.
+
+- Retiring is a separate job template, started by hand, never part of a
+  deployment workflow: several instances may be live in parallel, and only a
+  person decides which one is finished. The playbook is unnumbered for that
+  reason.
+- Explicit versions only: the survey field `retire_versions` takes text such
+  as `v24, v25`. Every version must be in the live list, at least one is
+  needed, and the counter's next number is never accepted.
+- The automatic wiped-server mode is dropped. After a reinstall the previous
+  version stays live and in DNS until it is retired by hand; this is intended.
+- Version 1 cleans two things: every A record in the zone with the version as
+  a whole label (`hactar.v24`, later also `aap.v24`, never `hactar.v240`), then
+  the version in the live list of `state/deployment_counter.yml`, written with
+  the same SHA-guarded contents API call as the counter job, comments and the
+  next number unchanged. DNS goes first, so a failed delete leaves the version
+  live and a rerun finds its names again. Missing records are fine.
+- Every later stage that creates something per instance (VMs, vhosts,
+  certificates, AAP inventory entries, generated secrets, monitoring) adds its
+  own cleanup step to this job when it is built.
+- Removing the Red Hat registration is planned once a Red Hat API token
+  exists.
+- Everything is found by the version in its name; there is no extra registry.
+- The list write has no skip condition: the assertion already guarantees that
+  every named version is live, so the list always changes. A rerun after a
+  successful retire is refused at the assertion, before any write.
+
 ## Reboot and verify in one playbook, no pre-reboot verify — 2026-11-17
 
 Decided with the user on 17 November 2026, built as
