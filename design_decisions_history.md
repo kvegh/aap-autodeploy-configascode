@@ -1,5 +1,15 @@
 # Design decisions history
 
+## Drop the aap.yml dispatcher — 2026-11-18
+
+Decided with the user on 18 November 2026. In the old implementation every
+job template ran `aap.yml` first. It checked the requested playbook against
+an allow-list (which even named a playbook that does not exist), repeated the
+same pre-checks every stage already does, and then imported the actual
+playbook. 2 of 39 rated items reached Necessity 5; both are covered because
+each new job template points directly at its own playbook. There is no
+dispatcher in the new design.
+
 ## Free-space check only when an image is missing — 2026-11-18
 
 Decided with the user on 18 November 2026, in

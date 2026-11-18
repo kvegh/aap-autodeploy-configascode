@@ -136,6 +136,8 @@ checksums are required CaC and not yet in the private repository.
 Step 15 of the old host rebuild workflow, the old replacement playbook run on
 its own as the last node, is dropped: it switched on VM network isolation and
 made libvirt depend on that firewall, which the new design does not want.
+The old `aap.yml` dispatcher, which every job template ran first, is dropped
+as well: each job template points directly at its own playbook.
 
 Not yet started: the stages after the image download. Nothing here has run
 against a real server yet. The old repositories remain the working implementation until a
