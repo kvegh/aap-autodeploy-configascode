@@ -1,5 +1,24 @@
 # Design decisions history
 
+## Host accounts, SSH access and fail2ban trusted addresses — 2026-11-18
+
+Decided with the user on 18 November 2026. The host has exactly three
+accounts that can log in: `ansible` (created by the bootstrap),
+`aap_hypervisor` (the AAP VM logs in with it through internal port 22) and
+the owner's personal account. No other accounts are created. sshd
+`AllowUsers` lists exactly these three. `aap_hypervisor` and the personal
+account are in `wheel`, which has passwordless sudo. The personal account
+name is an environment detail and lives in the vault.
+
+The authorized public keys of `aap_hypervisor` and the personal account were
+taken from their current `authorized_keys` on production hactar, option
+prefixes included, and stored in the vault.
+
+The fail2ban trusted addresses (`host_trusted_public_ips`) reference
+production hactar's and hactar-ng's addresses that are already in the vault
+for the provider stages. AAP reaches the hosts through those addresses via
+NAT, so they cover AAP too, and no address is stored twice.
+
 ## Let RHEL assign user IDs — 2026-11-18
 
 Decided with the user on 18 November 2026. Fixed UIDs and GIDs only matter
