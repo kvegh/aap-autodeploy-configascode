@@ -1,5 +1,20 @@
 # Design decisions history
 
+## hactar-ng in the AutoDeploy-NGNG inventory — 2026-11-18
+
+Decided with the user on 18 November 2026. The host `hactar-ng` is added to
+the new inventory `AutoDeploy-NGNG`, in the group `autodeploy_target` that
+the host stages target. Its `ansible_host` is the expected server address
+from the vault (`vault_robot_expected_server_ip`); the SSH port is the
+default 22, so no `ansible_port` is set at first.
+
+The SSH stage records the port it manages as `ansible_port` on this host
+entry, and the provider reinstall removes it again. The inventory variables
+`aap_inventory_name: AutoDeploy-NGNG` and `aap_inventory_host_name:
+hactar-ng` name the inventory and host for those two tasks.
+
+The `hactar-ng` entry in the old inventory is untouched.
+
 ## Images hactar-ng downloads — 2026-11-18
 
 Decided with the user on 18 November 2026. hactar-ng downloads exactly five
