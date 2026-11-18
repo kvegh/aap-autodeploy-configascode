@@ -1,5 +1,24 @@
 # Design decisions history
 
+## Images hactar-ng downloads — 2026-11-18
+
+Decided with the user on 18 November 2026. hactar-ng downloads exactly five
+images: `/opt/images/rhel-9.8-x86_64-kvm.qcow2`,
+`/opt/images/goldimg-vm-1.disk.qcow2`, `/opt/images/windows-server-2022.qcow2`,
+`/opt/images/windows-server-2025.qcow2` and `/opt/vms/zabbix-disk.qcow2`.
+The disks of tra, the AAP VM and the test server (`tra-disk`, `aap-disk`,
+`testserver1-disk`) are not downloaded. The five images are about 45 GiB
+(44.9 GiB), within the 80 GiB free space the stage requires.
+
+The list is the plaintext CaC `images_download` in the AutoDeploy inventory
+variables of the private repository. The checksums were taken from the old
+capture 20261101T205024Z. The remote path keeps the old capture layout:
+`<remote root>/<capture id>/<destination without the leading slash>`.
+
+The rclone configuration was copied unchanged from the old vault into the
+new vault as `vault_images_rclone_conf`: the same Drive access production
+uses, kept on purpose because this is a demo environment.
+
 ## Host accounts, SSH access and fail2ban trusted addresses — 2026-11-18
 
 Decided with the user on 18 November 2026. The host has exactly three
