@@ -7,7 +7,7 @@
 # sudo.
 #
 # Required variables (vault):
-#   host_users             list of {name, uid, gid (optional), groups}; admins include wheel
+#   host_users             list of {name, groups}; admins include wheel
 #   host_authorized_keys   dict: user name -> list of public keys
 
 - name: Configure the users
@@ -15,20 +15,9 @@
   become: true
   gather_facts: false
   tasks:
-    - name: Create the groups with fixed IDs
-      ansible.builtin.group:
-        name: "{{ item.name }}"
-        gid: "{{ item.gid | default(item.uid) }}"
-        state: present
-      loop: "{{ host_users }}"
-      loop_control:
-        label: "{{ item.name }}"
-
-    - name: Create the users with fixed IDs and exact groups
+    - name: Create the users with exact groups
       ansible.builtin.user:
         name: "{{ item.name }}"
-        uid: "{{ item.uid }}"
-        group: "{{ item.name }}"
         groups: "{{ item.groups | default([]) }}"
         append: false
         state: present

@@ -46,10 +46,10 @@ Refactored, reviewed and committed:
 | Provider reinstall | 24 | 14 |
 | Deployment version | 34 | 5 |
 | Host DNS | about 45 | 4 |
-| Host access bootstrap | part of host setup | 9 |
+| Host access bootstrap | part of host setup | 8 |
 | Conversion to RHEL | about 120 | 14 |
 | RHEL update | about 20 | 2 |
-| Host setup (10 stages) | about 368 | 48 + 6 handlers |
+| Host setup (10 stages) | about 368 | 47 + 6 handlers |
 | Reboot and verify | about 78 | 15 |
 | Image download | 68 | 9 |
 | Instance retire | 69 | 6 |

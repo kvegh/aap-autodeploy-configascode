@@ -1,5 +1,14 @@
 # Design decisions history
 
+## Let RHEL assign user IDs — 2026-11-18
+
+Decided with the user on 18 November 2026. Fixed UIDs and GIDs only matter
+when files owned by an account move between machines or rebuilds (restores,
+copied data, NFS). None of that applies to the reinstalled hypervisor. The
+fixed IDs were carried over from the old design without need; dropping them
+leaves one value less per user. `host_ansible_uid` is gone, and `host_users`
+entries are `{name, groups}`.
+
 ## New machine credential for the ansible account — 2026-11-18
 
 Decided with the user on 18 November 2026. The old credential 30

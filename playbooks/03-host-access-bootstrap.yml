@@ -19,7 +19,6 @@
 # installed for root (robot_ssh_keys) and one of the keys listed for ansible.
 #
 # Required variables (vault):
-#   host_ansible_uid       fixed uid and gid of the ansible account
 #   host_authorized_keys   dict: user name -> list of public keys; uses 'ansible'
 #   host_bootstrap_user    optional, login of the fresh installation, default
 #                          root. Set it to ansible to rerun this stage once root
@@ -36,17 +35,9 @@
   vars_files:
     - vars/sshd-hardening.yml
   tasks:
-    - name: Create the ansible group with a fixed ID
-      ansible.builtin.group:
-        name: ansible
-        gid: "{{ host_ansible_uid }}"
-        state: present
-
-    - name: Create the ansible user with a fixed ID
+    - name: Create the ansible user
       ansible.builtin.user:
         name: ansible
-        uid: "{{ host_ansible_uid }}"
-        group: ansible
         state: present
 
     - name: Allow exactly the declared SSH keys for ansible
