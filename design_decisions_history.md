@@ -1,5 +1,15 @@
 # Design decisions history
 
+## New machine credential for the ansible account — 2026-11-18
+
+Decided with the user on 18 November 2026. The old credential 30
+"hactar-ng ssh key" holds a key that AAP cannot export, and its public half
+is unknown, so a reinstall could not install the matching key. The new
+credential "hactar-ng ansible-NGNG" is built from the vault key, so CaC can
+recreate it, and its public key is already in the provider key list.
+Credential 30 stays for the old repositories. The bootstrap job uses the new
+credential but logs in as root with the same key.
+
 ## Drop the aap.yml dispatcher — 2026-11-18
 
 Decided with the user on 18 November 2026. In the old implementation every
