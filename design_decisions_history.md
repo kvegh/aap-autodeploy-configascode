@@ -1,5 +1,26 @@
 # Design decisions history
 
+## WF1 job templates named `AutoDeploy-NGNG WF1 NN <step>` — 2026-11-18
+
+Decided with the user on 18 November 2026 (CET; exact time not recorded),
+implemented 19 November 2026, 05:42 CET. Version v0.0.29, no playbook change;
+the job templates live in AAP and in private CaC commit `83c18a6` of the
+companion repository.
+
+- One job template per playbook, named `AutoDeploy-NGNG WF1 NN <step>`, NN
+  the playbook number: 00 Provider reinstall, 01 Deployment version, 02 Host
+  DNS publish, 03 Host access bootstrap, 04 RHEL convert, 05 RHEL update,
+  06 Host setup, 07 Host reboot verify, 08 Images download.
+- Credentials follow each playbook header: 02 the DNS credential; 03 the
+  machine credential and the AAP credential; 04 the machine credential and
+  the subscription credential (which injects `rhsm_org_id` and
+  `rhsm_activation_key`); 05 to 07 the machine credential; 08 the machine
+  credential and the rclone credential.
+- The image download job template's timeout (111600 s) exceeds the per-image
+  `images_download_timeout` (default 21600 s) times the number of images
+  (5) plus an hour for the checksums, so it never cuts off a download that
+  is still inside its own limit.
+
 ## Managed SSH port set in the host access bootstrap, public NIC detected, hactar-ng as test host — 2026-11-18
 
 Decided with the user on 18 November 2026 (CET; exact time not recorded,
