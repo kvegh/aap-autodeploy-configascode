@@ -58,10 +58,7 @@ Three jobs outside the deployment workflow, started by hand:
   per instance adds its own cleanup step here.
 - `playbooks/aap-cac-apply.yml` applies the CaC of one use case from the
   private repository to AAP with the Community of Practice collections
-  (`filetree_read`, then `dispatch`). Not run against AAP yet.
-- `playbooks/aap-host-ca-trust.yml`, one task and a handler, makes the AAP
-  host trust the AAP installer's CA, so jobs (CaC apply) can verify AAP's
-  certificate. Job template not created yet.
+  (`filetree_read`, then `dispatch`).
 
 ## Before you run it
 

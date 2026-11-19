@@ -1,5 +1,13 @@
 # Design decisions history
 
+## AAP host CA trust playbook removed — 2026-11-19
+
+19 November 2026, approved by the user. The CA was added to the AAP host's
+trust store once by hand over SSH (user's permission), so
+`playbooks/aap-host-ca-trust.yml` (commit `0522679`) and the inventory host
+`aap-platform` were never used. Removed both. Future AAPs (WF2) get the shared
+CA through the installer instead; the need recurs there, but not in this form.
+
 ## Reboot check: libvirt daemons need not be running — 2026-11-19
 
 19 November 2026, 11:30 CET, within the user's run authorization; found by reading
