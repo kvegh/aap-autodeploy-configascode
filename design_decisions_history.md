@@ -3,8 +3,9 @@
 ## WF1 base host trimmed: accounts and all SSH in the bootstrap, nginx installed but not started — 2026-11-18
 
 Decided with the user on 18 November 2026 (CET; exact times not recorded),
-implemented 19 November 2026, 05:50 CET (v0.0.30). The CaC values that go
-with it are in the private repository (v0.0.29).
+implemented 19 November 2026, 05:50 CET (v0.0.30). Implementation commit
+`230076f`; the CaC values that go with it are in the private repository,
+commit `08561d1` (v0.0.29).
 
 - Accounts and SSH: the personal account (`host_users`, keys, `wheel` with
   passwordless sudo) is created by `03-host-access-bootstrap.yml` next to
