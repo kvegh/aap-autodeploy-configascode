@@ -4,7 +4,7 @@
 
 Decided with the user on 19 November 2026 (CET; exact time not recorded),
 implemented 19 November 2026, 06:00 CET (v0.0.33). Implementation commit
-recorded in a follow-up commit. No CaC change in the private repository.
+`7d270c5`. No CaC change; the private repository records the decision too.
 
 - The nginx login rate limit leaves WF1: it protects AAP's login, so it
   comes with WF2, like starting nginx. `09-web-edge.yml` no longer renders
