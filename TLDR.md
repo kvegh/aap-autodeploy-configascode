@@ -50,7 +50,7 @@ Nine stages:
   image from Google Drive and requires its pinned SHA-256. A corrupt file fails with its name and is
   deleted by hand before a rerun.
 
-Two jobs outside the deployment workflow, started by hand:
+Three jobs outside the deployment workflow, started by hand:
 
 - `playbooks/instance-retire.yml`, six tasks, retires the versions named in
   its survey: deletes every A record with the version as a label and removes
@@ -59,6 +59,9 @@ Two jobs outside the deployment workflow, started by hand:
 - `playbooks/aap-cac-apply.yml` applies the CaC of one use case from the
   private repository to AAP with the Community of Practice collections
   (`filetree_read`, then `dispatch`). Not run against AAP yet.
+- `playbooks/aap-host-ca-trust.yml`, one task and a handler, makes the AAP
+  host trust the AAP installer's CA, so jobs (CaC apply) can verify AAP's
+  certificate. Job template not created yet.
 
 ## Before you run it
 

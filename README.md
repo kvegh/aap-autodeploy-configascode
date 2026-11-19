@@ -175,13 +175,13 @@ stage has been proven here.
 
 - Playbooks are `NN-subject-action.yml`, numbered in execution order. Jobs
   outside the deployment workflow, started by hand, are unnumbered
-  (`instance-retire.yml`, `aap-cac-apply.yml`).
+  (`instance-retire.yml`, `aap-cac-apply.yml`, `aap-host-ca-trust.yml`).
 - Variables use `snake_case` with a prefix naming their source: `robot_` for
   provider API inputs and confirmations, `provider_` for values this automation
   derives at run time, `counter_` for the deployment counter, `dns_` for the host DNS stage, `rhsm_` for subscription inputs,
   `host_` for host configuration, `aap_` for the AAP inventory the stages
   update, `retire_` for the instance retire job, `cac_` for the CaC apply
-  job. Variables the CoP roles define keep their CoP names (`dir_orgs_vars`,
+  job, `ca_trust_` for the AAP host CA trust job. Variables the CoP roles define keep their CoP names (`dir_orgs_vars`,
   `aap_hostname`). Registered
   values carry the stage name, for example `rhel_convert_`. Values published
   for later workflow nodes start with `autodeploy_`.
@@ -244,6 +244,17 @@ What the job template needs (in AAP: "AutoDeploy-NGNG CaC apply"):
 - **Collections.** `dispatch` always runs the CoP version check, which uses
   `ansible.platform`; it and `ansible.hub` are dependencies of the CoP
   collections and come from private automation hub with them.
+
+- **Trust in AAP's certificate.** The job calls AAP by its name, whose
+  certificate the AAP installer's own CA signed. `playbooks/aap-host-ca-trust.yml`
+  copies that CA (already on the AAP host, never in Git) into the host's
+  trust anchors and runs `update-ca-trust`. AAP's job setting "Paths to
+  expose to isolated jobs" already mounts the host's `/etc/pki/ca-trust`
+  into every job container, so the EE trusts it too. It targets only the
+  inventory host `aap-platform` (never in `autodeploy_target`). Its job
+  template and SSH credential do not exist yet. Future AAPs (WF2) get one
+  shared AutoDeploy CA through the installer's `ca_tls_cert`/`ca_tls_key`,
+  trusted by the VM setup before the installer runs (decided, not built).
 
 Command line example:
 
