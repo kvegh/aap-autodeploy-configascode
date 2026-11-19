@@ -1,5 +1,19 @@
 # Design decisions history
 
+## Credential type renamed to "AAP CaC repo read-write token" — 2026-11-19
+
+Decided with the user on 19 November 2026 (CET; exact time not recorded),
+implemented 19 November 2026, 05:55 CET (v0.0.32). The change is in AAP and
+in the private repository (v0.0.31); implementation commit recorded in a
+follow-up commit. No playbook change.
+
+- Credential type 50 — "GitHub Counter Writer-NGNG" is now "AAP CaC repo
+  read-write token". Credential 61 — GitHub AutoDeploy CaC Secrets-NGNG uses
+  it. The injected variables stay `counter_git_username` and
+  `counter_git_token`, so `01-deployment-version-assign.yml`,
+  `aap-cac-apply.yml` and `instance-retire.yml` are unaffected.
+- Older entries below keep the old type name as history.
+
 ## WF1 base host trimmed: accounts and all SSH in the bootstrap, nginx installed but not started — 2026-11-18
 
 Decided with the user on 18 November 2026 (CET; exact times not recorded),
