@@ -36,6 +36,7 @@
   vars:
     controller_configuration_filetree_read_layout: create
     aap_configuration_secure_logging: true
+    aap_configuration_async_dir: /tmp/.ansible_async  # empty default broke async_status ("could not find job") on ansible-core 2.20
     aap_hostname: "{{ lookup('ansible.builtin.env', 'AAP_HOSTNAME') or lookup('ansible.builtin.env', 'CONTROLLER_HOST') }}"
     aap_validate_certs: >-
       {{ (lookup('ansible.builtin.env', 'AAP_VALIDATE_CERTS')
