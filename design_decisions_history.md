@@ -3,8 +3,9 @@
 ## WF1 workflow template — 2026-11-19
 
 Requested by the user on 18 November 2026 (CET; exact time not recorded),
-implemented 19 November 2026, 06:05 CET (v0.0.34). No playbook change; the
-workflow is defined in the private repository's CaC.
+implemented 19 November 2026, 06:05 CET (v0.0.34). Record commit
+`9088373`; no playbook change. The workflow is defined in the private
+repository's CaC, commit `e44b5cf`.
 
 - Workflow 203 — AutoDeploy-NGNG WF1 chains the job templates WF1 00 to 08
   strictly on success, no failure or always branches: no playbook header asks
