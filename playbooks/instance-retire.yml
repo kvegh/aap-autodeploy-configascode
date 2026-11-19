@@ -6,10 +6,13 @@
 # template, started by hand with the versions in the survey.
 #
 # Everything an instance owns is found by the version in its name; there is no
-# separate registry. This version cleans two things:
-#   1. every A record in the zone with the version as a whole label, for
+# separate registry. This version cleans three things:
+#   1. the AAP VM on the hypervisor (stopped and undefined) and its disk
+#   2. every A record in the zone with the version as a whole label, for
 #      example hactar.v24 and aap.v24, but never hactar.v240
-#   2. the version in the live list of the deployment counter
+#   3. the version in the live list of the deployment counter
+# The live list is written last, so a failure leaves the version live and a
+# rerun finds everything again.
 #
 # Extension rule: every later stage that creates something per instance (VMs,
 # vhosts, certificates, AAP inventory entries, generated secrets, monitoring)
@@ -17,7 +20,8 @@
 # registration is a planned follow-up; it needs a Red Hat API token.
 #
 # Required variables, supplied by the job template, its survey, the CaC
-# inventory, the Git write credential and the DNS credential:
+# inventory, the Git write credential, the DNS credential and the machine
+# credential of the hypervisor:
 #   retire_versions        survey text, versions separated by commas or spaces
 #   counter_repository     private repository as owner/name
 #   counter_file_path      counter file in that repository, from the CaC inventory
@@ -25,8 +29,10 @@
 #   counter_git_token      token with contents write access to that repository
 #   dns_godaddy_token      GoDaddy API token for the zone
 #   dns_zone               DNS zone, for example example.com
+#   aap_vm_name            AAP VM name, a template on autodeploy_deployment_version
+#   aap_vm_disk_path       its disk, a template on aap_vm_name
 
-- name: Retire the named deployment instances
+- name: Check the deployment versions to retire
   hosts: localhost
   connection: local
   gather_facts: false
@@ -34,7 +40,6 @@
   vars:
     counter_api_url: "https://api.github.com/repos/{{ counter_repository }}/contents/{{ counter_file_path }}"
     counter_live_pattern: '(?m)^autodeploy_deployment_instances_live: \[[0-9, ]*\]$'
-    dns_api_base: https://api.godaddy.com
   tasks:
     - name: Read the counter file and its blob SHA
       ansible.builtin.uri:
@@ -74,6 +79,41 @@
         fail_msg: >-
           Give live versions as vXY, separated by commas or spaces. Live now:
           {{ counter_live | join(', ') }}. Nothing was changed.
+
+# A failure here must stop the whole run before DNS and the live list change.
+- name: Remove the AAP VMs of the retired versions
+  hosts: autodeploy_target
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    # The CaC names are templates on the deployment version; each item sets it.
+    - name: Stop and undefine the AAP VM
+      community.libvirt.virt_install:
+        name: "{{ aap_vm_name }}"
+        state: absent
+      loop: "{{ hostvars['localhost'].retire_labels }}"
+      vars:
+        autodeploy_deployment_version: "{{ item }}"
+
+    - name: Remove the AAP VM disk
+      ansible.builtin.file:
+        path: "{{ aap_vm_disk_path }}"
+        state: absent
+      loop: "{{ hostvars['localhost'].retire_labels }}"
+      vars:
+        autodeploy_deployment_version: "{{ item }}"
+
+- name: Remove the DNS names and live list entries of the retired versions
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    counter_api_url: "https://api.github.com/repos/{{ counter_repository }}/contents/{{ counter_file_path }}"
+    counter_live_pattern: '(?m)^autodeploy_deployment_instances_live: \[[0-9, ]*\]$'
+    dns_api_base: https://api.godaddy.com
+  tasks:
 
     # A partial list would let names survive while the version leaves the live
     # list, and no rerun would find them again.

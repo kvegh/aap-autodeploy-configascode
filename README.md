@@ -59,7 +59,8 @@ Refactored, reviewed and committed:
 | Host setup (8 stages) | about 368 | 32 + 5 handlers |
 | Reboot and verify | about 78 | 14 |
 | Image download | 68 | 9 |
-| Instance retire | 69 | 6 |
+| AAP VM create | about 147 | 4 |
+| Instance retire | 69 | 8 |
 
 The reinstall stage removes `ansible_port` from the target's AAP inventory
 host before the erase, so later jobs reach the rebuilt host on port 22, and
@@ -68,7 +69,9 @@ last installation. The deployment version stage reads
 the plaintext counter in the private repository, publishes it as
 `autodeploy_deployment_version` and writes the next number back, with the
 assigned version added to the list of live instances, through the GitHub
-contents API. The host DNS stage creates or corrects the name
+contents API. A launch may instead name a live version in
+`deployment_version` (for example to rerun a deployment); it is published
+as it is and the counter is not changed. The host DNS stage creates or corrects the name
 `host_fqdn` (in the CaC: `<label>.vXY.<zone>`) at GoDaddy and waits until public DNS returns the host
 address. It never deletes names: older versions may still be live instances;
 the instance retire job removes them.
@@ -136,7 +139,8 @@ instance owns is found by the version in its name, without a separate
 registry. It deletes every A record in the zone that has the version as a
 whole label (`hactar.v24`, `aap.v24`, never `hactar.v240`), then removes the
 versions from the live list with the same SHA-guarded write as the deployment
-version stage. DNS goes first, so a failed delete leaves the version live and
+version stage. Before DNS it stops, undefines and deletes each version's AAP
+VM and disk on the hypervisor (names from the CaC templates). VMs and DNS go before the list, so a failed delete leaves the version live and
 a rerun finds its names again. After a reinstall the previous version stays
 live and in DNS until it is retired by hand; this is intended. Extension rule:
 every later stage that creates something per instance (VMs, vhosts,
@@ -161,13 +165,28 @@ directories, their SELinux label and owner come from the storage stage, and
 libvirt takes over a VM's disks when it starts. The image list and its
 checksums are required CaC in the private repository.
 
+The AAP VM stage (`09-aap-vm-create.yml`), the first step of the AAP
+deployment, copies the golden image `aap_vm_base_image` into the vms pool,
+grows it with `qemu-img resize` and prepares it offline with `virt-customize`:
+the FQDN `aap_vm_fqdn` (`aap27.vXY.<zone>`, the AAP version from the CaC) as
+host name, the automation account with exactly its declared keys and its sudo
+rule, an empty machine-id, `subscription-manager clean` and a SELinux
+relabel. No cloud-init. `community.libvirt.virt_install` then imports it as
+`aap_vm_name` (`aap27-vXY`) with the CaC sizes, the RHEL 9 OS type (virtio),
+autostart and the fixed MAC of the reservation `aap` in
+`net_internal.reservations`. Once the VM is defined, a rerun touches neither
+the disk nor the VM. The filesystem is grown in the installation stage. The
+instance retire job removes the VM and its disk. Not yet built: the static
+inventory host for the VM behind the hypervisor and the login proof (open
+question: the inventory host name cannot carry the version).
+
 Step 15 of the old host rebuild workflow, the old replacement playbook run on
 its own as the last node, is dropped: it switched on VM network isolation and
 made libvirt depend on that firewall, which the new design does not want.
 The old `aap.yml` dispatcher, which every job template ran first, is dropped
 as well: each job template points directly at its own playbook.
 
-Not yet started: the stages after the image download. Nothing here has run
+Not yet started: the stages after the AAP VM. Nothing here has run
 against a real server yet. The old repositories remain the working implementation until a
 stage has been proven here.
 
@@ -180,7 +199,7 @@ stage has been proven here.
   provider API inputs and confirmations, `provider_` for values this automation
   derives at run time, `counter_` for the deployment counter, `dns_` for the host DNS stage, `rhsm_` for subscription inputs,
   `host_` for host configuration, `aap_` for the AAP inventory the stages
-  update, `retire_` for the instance retire job, `cac_` for the CaC apply
+  update, `aap_vm_` for the AAP VM, `retire_` for the instance retire job, `cac_` for the CaC apply
   job. Variables the CoP roles define keep their CoP names (`dir_orgs_vars`,
   `aap_hostname`). Registered
   values carry the stage name, for example `rhel_convert_`. Values published

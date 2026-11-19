@@ -1,5 +1,6 @@
 ---
-# Assign the next deployment version (vXY) and advance the counter.
+# Assign the next deployment version (vXY) and advance the counter, or take
+# the version given at launch.
 #
 # The counter is a plaintext file in the private companion repository with two
 # fields: the next number and the list of live versions. This playbook reads
@@ -8,12 +9,20 @@
 # repository's default branch. Retiring an instance removes it from the list;
 # that is a separate job.
 #
+# A launch may name an existing deployment instead, for example to rerun a
+# deployment after a failure: if deployment_version is set, it must be on the
+# live list, is published as it is, and the counter is not changed.
+#
 # Required variables, supplied by the job template, the CaC inventory and the
 # Git write credential:
 #   counter_repository     private repository as owner/name
 #   counter_file_path      counter file in that repository, from the CaC inventory
 #   counter_git_username   GitHub account that owns the token
 #   counter_git_token      token with contents write access to that repository
+#
+# Optional launch variable:
+#   deployment_version     a live version to deploy on, for example v26 or 26;
+#                          empty assigns the next number
 #
 # Published for later workflow nodes:
 #   autodeploy_deployment_version   for example v26
@@ -64,7 +73,10 @@
           - counter_number | int not in counter_live | map('int')
           - counter_text is ansible.builtin.regex(counter_next_pattern)
           - counter_text is ansible.builtin.regex(counter_live_pattern)
-        fail_msg: The counter file is missing, damaged, past v99, or already lists the next number as live.
+          - deployment_version | default('', true) == '' or deployment_version | regex_replace('^v', '') | int in counter_live | map('int')
+        fail_msg: >-
+          The counter file is missing, damaged, past v99, or already lists the next number as live,
+          or the given deployment version is not live.
 
     - name: Write the next number against the read blob SHA
       ansible.builtin.uri:
@@ -91,10 +103,12 @@
         status_code: 200
         timeout: 30
       changed_when: true
+      when: deployment_version | default('', true) == ''
 
     # Published only after the write succeeded, so a failed write never hands
     # out a number.
     - name: Publish the deployment version
       ansible.builtin.set_stats:
         data:
-          autodeploy_deployment_version: "v{{ '%02d' | format(counter_number | int) }}"
+          autodeploy_deployment_version: >-
+            v{{ '%02d' | format((deployment_version | default('', true) or counter_number) | string | regex_replace('^v', '') | int) }}

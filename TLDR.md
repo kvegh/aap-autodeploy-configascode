@@ -14,7 +14,7 @@ secrets are vault encrypted.
 
 ## What exists today
 
-Nine stages:
+Ten stages:
 
 - `playbooks/00-provider-reinstall.yml`, fourteen tasks, reinstalls a confirmed
   dedicated server with Rocky Linux 9 and removes the managed SSH port from its
@@ -22,7 +22,7 @@ Nine stages:
 - `playbooks/01-deployment-version-assign.yml`, five tasks, takes the next
   deployment version (vXY) from the counter in the private repository and
   writes the number plus one back, adding the assigned version to the list of
-  live instances.
+  live instances; or takes a live version given as `deployment_version`.
 - `playbooks/02-host-dns-publish.yml`, three tasks, publishes the host name for
   that version at GoDaddy and waits until public DNS resolves it.
 - `playbooks/03-host-access-bootstrap.yml`, twenty tasks, creates the
@@ -49,11 +49,16 @@ Nine stages:
   `/opt` when an image is missing, installs rclone, downloads each missing VM
   image from Google Drive and requires its pinned SHA-256. A corrupt file fails with its name and is
   deleted by hand before a rerun.
+- `playbooks/09-aap-vm-create.yml`, four tasks, copies the golden image into
+  the vms pool, grows it, prepares it with virt-customize (FQDN, automation
+  account with key and sudo, empty machine-id, no registration) and creates
+  the AAP VM `aap27-vXY` with the fixed MAC of the reservation `aap`. Login
+  proof through the hypervisor not built yet.
 
 Three jobs outside the deployment workflow, started by hand:
 
-- `playbooks/instance-retire.yml`, six tasks, retires the versions named in
-  its survey: deletes every A record with the version as a label and removes
+- `playbooks/instance-retire.yml`, eight tasks, retires the versions named in
+  its survey: removes their AAP VMs and disks, deletes every A record with the version as a label and removes
   the versions from the live list. Every later stage that creates something
   per instance adds its own cleanup step here.
 - `playbooks/aap-cac-apply.yml` applies the CaC of one use case from the

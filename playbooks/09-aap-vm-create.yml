@@ -1,0 +1,107 @@
+---
+# Create the AAP VM of a deployment version on the hypervisor.
+#
+# The disk is a copy of the golden image (downloaded and checked by the image
+# download stage) in the vms pool, grown to the configured size. Its
+# filesystem is grown later, in the AAP installation stage. Before the first
+# boot, libguestfs (virt-customize) prepares the copy offline: the FQDN as
+# host name, the automation account with exactly its declared keys and its
+# sudo rule (as the host access bootstrap sets them on the hypervisor), an
+# empty machine-id and no Red Hat registration left from the image, and a
+# SELinux relabel for the files it wrote. No cloud-init. SSH host keys are
+# not touched: host key checking is off, as for the hypervisor.
+#
+# The VM gets a fixed MAC from the internal network's DHCP reservation, so its
+# address is known before it exists, and starts with the host. Its RHEL 9 OS
+# type gives it virtio disk and network devices.
+#
+# Rerunnable: once the VM is defined, the disk is neither resized nor
+# customized again and the VM is left as it is. A run that failed before the
+# VM was defined repeats the preparation on the same copy.
+#
+# Runs as the automation account on the port the host access bootstrap
+# recorded in the AAP inventory.
+#
+# Required variables, from the CaC inventory unless noted:
+#   autodeploy_deployment_version   from the deployment version stage, for example v29
+#   aap_vm_name            VM and short host name, for example aap27-v29
+#   aap_vm_fqdn            host name set in the VM, for example aap27.v29.example.com
+#   aap_vm_base_image      golden image on the hypervisor
+#   aap_vm_disk_path       VM disk in the vms pool
+#   aap_vm_disk_size       disk size as qemu-img takes it, for example 60G
+#   aap_vm_vcpus           virtual CPUs
+#   aap_vm_memory_mib      memory in MiB
+#   aap_vm_osinfo          libosinfo name of the guest OS
+#   aap_vm_network         libvirt network
+#   aap_vm_mac             MAC of the network's DHCP reservation for the VM
+#   aap_vm_autostart       start the VM with the host
+#   host_automation_user   automation account, the user of the AAP machine credential
+#   host_authorized_keys   dict user name -> list of public keys
+#   host_automation_sudo_rule  sudoers rule of the automation account
+
+- name: Create the AAP VM
+  hosts: autodeploy_target
+  become: true
+  gather_facts: false
+  vars:
+    # libvirt keeps the definition of every system VM here; the disk steps
+    # below must never touch the disk of a defined, possibly running VM.
+    aap_vm_definition: "/etc/libvirt/qemu/{{ aap_vm_name }}.xml"
+  tasks:
+    - name: Copy the golden image into the VM pool
+      ansible.builtin.copy:
+        src: "{{ aap_vm_base_image }}"
+        dest: "{{ aap_vm_disk_path }}"
+        remote_src: true
+        force: false
+        mode: preserve
+
+    # No module resizes a disk image file without its volume XML.
+    - name: Grow the VM disk to its configured size
+      ansible.builtin.command:
+        argv: [qemu-img, resize, "{{ aap_vm_disk_path }}", "{{ aap_vm_disk_size }}"]
+        creates: "{{ aap_vm_definition }}"
+
+    # No module edits a disk image offline; virt-customize is libguestfs' tool.
+    - name: Prepare the VM disk for its first boot
+      ansible.builtin.command:
+        argv:
+          - virt-customize
+          - --add
+          - "{{ aap_vm_disk_path }}"
+          - --no-network
+          - --hostname
+          - "{{ aap_vm_fqdn }}"
+          - --run-command
+          - "id {{ host_automation_user }} || useradd {{ host_automation_user }}"
+          - --run-command
+          - "rm -f ~{{ host_automation_user }}/.ssh/authorized_keys"
+          - --ssh-inject
+          - "{{ host_automation_user }}:string:{{ host_authorized_keys[host_automation_user] | join('\n') }}"
+          - --write
+          - "/etc/sudoers.d/{{ host_automation_user }}:# Managed by aap-autodeploy-configascode\n{{ host_automation_sudo_rule }}\n"
+          - --chmod
+          - "0440:/etc/sudoers.d/{{ host_automation_user }}"
+          - --truncate
+          - /etc/machine-id
+          - --run-command
+          - subscription-manager clean
+          - --selinux-relabel
+        creates: "{{ aap_vm_definition }}"
+
+    - name: Create and start the AAP VM
+      community.libvirt.virt_install:
+        name: "{{ aap_vm_name }}"
+        import: true
+        osinfo:
+          name: "{{ aap_vm_osinfo }}"
+        vcpus: "{{ aap_vm_vcpus }}"
+        memory: "{{ aap_vm_memory_mib }}"
+        disks:
+          - path: "{{ aap_vm_disk_path }}"
+            format: qcow2
+        networks:
+          - network: "{{ aap_vm_network }}"
+            mac:
+              address: "{{ aap_vm_mac }}"
+        autostart: "{{ aap_vm_autostart }}"
