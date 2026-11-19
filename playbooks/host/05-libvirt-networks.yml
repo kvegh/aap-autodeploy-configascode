@@ -12,8 +12,9 @@
 # Required variables, from the CaC inventory:
 #   host_libvirt_networks   list of {name, autostart, active, template}, where
 #                           template is true when templates/net-<name>.xml.j2 exists
-#   net_internal            bridge, mac, domain, address, netmask,
-#                           dhcp_start, dhcp_end, reservations, dns_hosts, uuid (optional)
+#   net_internal            bridge, mac, domain, address, netmask, forward_mode,
+#                           nat_port_start, nat_port_end, dhcp_start, dhcp_end,
+#                           reservations, dns_hosts, uuid (optional)
 
 - name: Configure the libvirt networks
   hosts: autodeploy_target

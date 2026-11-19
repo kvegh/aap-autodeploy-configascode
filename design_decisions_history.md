@@ -1,5 +1,48 @@
 # Design decisions history
 
+## Remaining self-defined configuration moved to the CaC; two simplifications — 2026-11-19
+
+Decided by the user on 19 November 2026 (CET; exact time not recorded),
+implemented 19 November 2026, 06:51 CET (v0.0.37). Implementation commit IDs
+follow in a later commit. Settles the points the previous entry left open.
+
+- Moved into the CaC (inventory AutoDeploy-NGNG, plain), no defaults in code:
+  - automation account name: `host_automation_user` (`ansible`, the user of
+    the AAP machine credential, unchanged); used for the account, its key
+    lookup, its sudoers file, the connection switch and, as a job-time
+    template, in `host_ssh_allow_users`
+  - sudo rules: `host_automation_sudo_rule` (job-time template on
+    `host_automation_user`) and `host_wheel_sudo_rule`
+  - host naming: `host_short_name`, `host_dns_record`, `host_fqdn` as job-time
+    templates from `dns_host_label`, the deployment version and `dns_zone`;
+    one definition for the base and DNS stages
+  - counter file path: `counter_file_path` (deployment version, instance retire)
+  - internal network: `net_internal.forward_mode`, `nat_port_start`,
+    `nat_port_end`
+  - rclone retries: `images_rclone_retries`, `images_rclone_low_level_retries`
+  - nginx catch-all ports: `host_web_edge_http_port`, `host_web_edge_https_port`
+  - `cac_usecase` and `cac_repository_ref`: removed from `aap-cac-apply.yml`,
+    set in the extra variables of job template "AutoDeploy-NGNG CaC apply"
+    (CaC and AAP, id 204); command line runs pass them with `-e`.
+- Kept in code: third-party facts (EPEL and convert2rhel repository and GPG
+  key URLs).
+- Simplified: the internal network's `<bridge>` drops `stp='on' delay='0'`
+  (libvirt's defaults, same result); the image download's free-space check
+  reads `df --output=avail -B1G /opt` instead of matching mount candidates,
+  still only when an image is missing (`df` rounds up to whole GiB).
+- Rollout: as before, the AAP inventory gets the new variables only when the
+  CaC is applied; until then WF1 jobs of this version fail on undefined
+  variables. Job template 204's extra variables were updated in AAP directly
+  (only that change), so the CaC apply job itself works before the next apply.
+
+Checks: `ansible-lint --profile production --strict` 0 failures, 0 warnings;
+syntax check of all playbooks in `ee-proj-aap-cac@sha256:e6451a10…`;
+`filetree_read` of the private tree: every variable the playbooks reference is
+defined, the job-time templates render (`hactar-v26`, `hactar.v26.supercorp.at`),
+a list element template in inventory variables renders at job time (EE test);
+`net-internal.xml.j2` and `00-default.conf.j2` render with the CaC values;
+job template 204 from `filetree_read` matches AAP. Not executed in AAP.
+
 ## Configuration separated from execution code; only secrets encrypted — 2026-11-19
 
 Decided by the user on 19 November 2026 (CET; exact time not recorded),

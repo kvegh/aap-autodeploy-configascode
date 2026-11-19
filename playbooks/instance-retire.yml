@@ -16,10 +16,11 @@
 # adds its own cleanup step here when it is built. Removing the Red Hat
 # registration is a planned follow-up; it needs a Red Hat API token.
 #
-# Required variables, supplied by the job template, its survey, the Git write
-# credential and the DNS credential:
+# Required variables, supplied by the job template, its survey, the CaC
+# inventory, the Git write credential and the DNS credential:
 #   retire_versions        survey text, versions separated by commas or spaces
 #   counter_repository     private repository as owner/name
+#   counter_file_path      counter file in that repository, from the CaC inventory
 #   counter_git_username   GitHub account that owns the token
 #   counter_git_token      token with contents write access to that repository
 #   dns_godaddy_token      GoDaddy API token for the zone
@@ -31,7 +32,7 @@
   gather_facts: false
   become: false
   vars:
-    counter_api_url: "https://api.github.com/repos/{{ counter_repository }}/contents/state/deployment_counter.yml"
+    counter_api_url: "https://api.github.com/repos/{{ counter_repository }}/contents/{{ counter_file_path }}"
     counter_live_pattern: '(?m)^autodeploy_deployment_instances_live: \[[0-9, ]*\]$'
     dns_api_base: https://api.godaddy.com
   tasks:

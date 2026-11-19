@@ -11,8 +11,8 @@
 # qemu, and libvirt's dynamic ownership takes over the disks of a VM when it
 # starts.
 #
-# Runs as ansible on the port the host access bootstrap recorded in the AAP
-# inventory.
+# Runs as the automation account on the port the host access bootstrap
+# recorded in the AAP inventory.
 #
 # Required variables, from the CaC inventory unless noted:
 #   images_download            list of {remote, dest, sha256}, e.g.
@@ -22,6 +22,8 @@
 #   images_download_timeout    seconds per image; must stay below the job
 #                              template timeout
 #   images_min_free_gib        free GiB required on /opt when an image is missing
+#   images_rclone_retries      rclone --retries, whole-transfer retries
+#   images_rclone_low_level_retries   rclone --low-level-retries
 
 - name: Download the VM images
   hosts: autodeploy_target
@@ -29,12 +31,6 @@
   gather_facts: false
   vars:
     images_rclone_config: /root/.config/rclone/rclone.conf
-    # /opt and its parents; the longest one that is a mount point holds /opt.
-    images_opt_mount_candidates: [/, /opt]
-    images_opt_mount: >-
-      {{ ansible_facts['mounts']
-         | selectattr('mount', 'in', images_opt_mount_candidates)
-         | sort(attribute='mount') | last }}
     images_missing: >-
       {{ images_download_present.results
          | rejectattr('stat.exists') | list | length > 0 }}
@@ -50,20 +46,23 @@
         label: "{{ item.dest }}"
       register: images_download_present
 
-    - name: Read the mounted filesystems
-      ansible.builtin.setup:
-        gather_subset: ['!all', '!min', 'mounts']
+    # Checked before anything is downloaded, where the space is used, and only
+    # when something is still to be downloaded. df reports the filesystem that
+    # holds /opt, whichever mount point that is; -B1G prints whole GiB.
+    - name: Read the free space on /opt
+      ansible.builtin.command:
+        argv: [df, --output=avail, -B1G, /opt]
+      register: images_opt_free
+      changed_when: false
+      check_mode: false
       when: images_missing
 
-    # Checked before anything is downloaded, where the space is used, and only
-    # when something is still to be downloaded.
     - name: Require enough free space on /opt
       ansible.builtin.assert:
         that:
-          - images_opt_mount['size_available'] >= (images_min_free_gib | int) * 1073741824
+          - images_opt_free.stdout_lines[-1] | int >= images_min_free_gib | int
         fail_msg: >-
-          /opt (filesystem mounted at {{ images_opt_mount['mount'] }}) has
-          {{ (images_opt_mount['size_available'] / 1073741824) | round(1) }} GiB free;
+          /opt has {{ images_opt_free.stdout_lines[-1] | trim }} GiB free;
           {{ images_min_free_gib }} GiB are required before downloading.
       when: images_missing
 
@@ -106,9 +105,9 @@
           - "{{ item.remote }}"
           - "{{ item.dest }}"
           - --retries
-          - "8"
+          - "{{ images_rclone_retries }}"
           - --low-level-retries
-          - "20"
+          - "{{ images_rclone_low_level_retries }}"
         creates: "{{ item.dest }}"
       async: "{{ images_download_timeout }}"
       poll: 30

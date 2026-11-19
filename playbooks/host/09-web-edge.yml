@@ -15,6 +15,8 @@
 #   host_web_edge_packages   nginx, certbot and fail2ban packages
 #   host_web_edge_services   units to start and enable (fail2ban)
 #   host_web_edge_timers     timers to start and enable (certificate renewal)
+#   host_web_edge_http_port, host_web_edge_https_port
+#                            ports of the catch-all server (00-default.conf)
 #   host_fail2ban_jails      dict jail name -> settings, rendered into the jail
 #                            file; DEFAULT.ignoreip must hold our own public
 #                            addresses (host_trusted_public_ips) and AAP, so the

@@ -4,12 +4,12 @@
 {% if net_internal.uuid is defined %}
   <uuid>{{ net_internal.uuid }}</uuid>
 {% endif %}
-  <forward mode='nat'>
+  <forward mode='{{ net_internal.forward_mode }}'>
     <nat>
-      <port start='1024' end='65535'/>
+      <port start='{{ net_internal.nat_port_start }}' end='{{ net_internal.nat_port_end }}'/>
     </nat>
   </forward>
-  <bridge name='{{ net_internal.bridge }}' stp='on' delay='0'/>
+  <bridge name='{{ net_internal.bridge }}'/>
   <mac address='{{ net_internal.mac }}'/>
   <domain name='{{ net_internal.domain }}' localOnly='yes'/>
 {% if net_internal.dns_hosts | default([]) %}

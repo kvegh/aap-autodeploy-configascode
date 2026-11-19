@@ -1,19 +1,20 @@
 ---
-# Create the ansible and personal accounts, turn off root login and move SSH
+# Create the automation and personal accounts, turn off root login and move SSH
 # to the managed port, minutes after the reinstall.
 #
 # The host is exposed to the internet from the moment the provider has
 # installed it, with root login by key on port 22. The previous implementation
-# ran as root through most of its run. This stage runs first: it creates
-# ansible, the user of the AAP machine credential, proves its login and sudo,
-# and only then turns off root, password and keyboard-interactive login. Every
-# later stage runs as ansible on the managed port.
+# ran as root through most of its run. This stage runs first: it creates the
+# automation account (host_automation_user), the user of the AAP machine
+# credential, proves its login and sudo, and only then turns off root,
+# password and keyboard-interactive login. Every later stage runs as the
+# automation account on the managed port.
 #
-# ansible gets passwordless sudo: it logs in by key only, so a sudo password
-# would add little and would have to be stored and injected as one more secret.
-# The personal accounts (host_users) are created here too, with their keys;
-# admins are members of wheel, which gets passwordless sudo for the same
-# reason. AllowUsers is part of the SSH settings from the first change on, so
+# The sudo rules come from the CaC: passwordless sudo for the automation
+# account (it logs in by key only, so a sudo password would add little and
+# would have to be stored and injected as one more secret) and for wheel, the
+# group of the admins among the personal accounts (host_users), which are
+# created here too, with their keys. AllowUsers is part of the SSH settings from the first change on, so
 # the login proof on the managed port runs with it in force.
 #
 # All SSH configuration of the hypervisor lives here. The move to the managed
@@ -44,15 +45,22 @@
 # on port 22.
 #
 # The machine credential's SSH key must be one of the keys the reinstall stage
-# installed for root (robot_ssh_keys) and one of the keys listed for ansible.
+# installed for root (robot_ssh_keys) and one of the keys listed for the
+# automation account.
 #
 # Required variables, all from the CaC inventory:
-#   host_authorized_keys   dict user name -> list of public keys, for
-#                          ansible and every account in host_users
+#   host_automation_user   automation account, the user of the AAP machine
+#                          credential
+#   host_automation_sudo_rule  sudoers rule of the automation account, written
+#                          to /etc/sudoers.d/<host_automation_user>
+#   host_wheel_sudo_rule   sudoers rule for wheel, written to
+#                          /etc/sudoers.d/wheel-nopasswd
+#   host_authorized_keys   dict user name -> list of public keys, for the
+#                          automation account and every account in host_users
 #   host_users             personal accounts, list of {name, groups};
 #                          admins include wheel
-#   host_ssh_allow_users   accounts allowed to log in: ansible and the
-#                          accounts in host_users
+#   host_ssh_allow_users   accounts allowed to log in: the automation account
+#                          and the accounts in host_users
 #   host_ssh_port          managed SSH port
 #   dns_host_ipv4          public IPv4 of the host, as for the host DNS stage
 #   net_internal           the internal network; its address is the bridge's
@@ -62,7 +70,8 @@
 #                          ListenAddress and AllowUsers are added here
 #   aap_inventory_name     AAP inventory that holds this host under its inventory name
 #   host_bootstrap_user    login of the fresh installation, root. Set it to
-#                          ansible to rerun this stage once root login is off;
+#                          the automation account to rerun this stage once
+#                          root login is off;
 #                          a rerun connects on the recorded port.
 #
 # Credentials: the machine credential, and the standard Red Hat Ansible
@@ -72,9 +81,10 @@
 - name: Create the accounts, turn off root login and move SSH to the managed port
   hosts: autodeploy_target
   become: true
-  # The machine credential logs in as ansible, which does not exist yet on a
-  # fresh installation. Play variables override the credential's user, so this
-  # play alone starts as root; the tasks below switch it to ansible.
+  # The machine credential logs in as the automation account, which does not
+  # exist yet on a fresh installation. Play variables override the credential's
+  # user, so this play alone starts as root; the tasks below switch it to the
+  # automation account.
   vars:
     ansible_user: "{{ host_bootstrap_user }}"
     host_sshd_bootstrap_settings: >-
@@ -82,27 +92,27 @@
       'AllowUsers': host_ssh_allow_users | join(' ')}) }}
     host_sshd_final_listen: ["{{ dns_host_ipv4 }}:{{ host_ssh_port }}", "{{ net_internal.address }}:{{ host_ssh_internal_port }}"]
   tasks:
-    - name: Create the ansible user
+    - name: Create the automation account
       ansible.builtin.user:
-        name: ansible
+        name: "{{ host_automation_user }}"
         state: present
 
-    - name: Allow exactly the declared SSH keys for ansible
+    - name: Allow exactly the declared SSH keys for the automation account
       ansible.posix.authorized_key:
-        user: ansible
-        key: "{{ host_authorized_keys['ansible'] | join('\n') }}"
+        user: "{{ host_automation_user }}"
+        key: "{{ host_authorized_keys[host_automation_user] | join('\n') }}"
         exclusive: true
         state: present
 
-    - name: Allow passwordless sudo for ansible
+    - name: Write the sudo rule of the automation account
       ansible.builtin.copy:
-        dest: /etc/sudoers.d/ansible
+        dest: "/etc/sudoers.d/{{ host_automation_user }}"
         owner: root
         group: root
         mode: "0440"
         content: |
           # Managed by aap-autodeploy-configascode
-          ansible ALL=(ALL) NOPASSWD: ALL
+          {{ host_automation_sudo_rule }}
         validate: /usr/sbin/visudo -cf %s
 
     - name: Create the personal accounts with exact groups
@@ -125,7 +135,7 @@
       loop_control:
         label: "{{ item.name }}"
 
-    - name: Allow passwordless sudo for wheel
+    - name: Write the sudo rule for wheel
       ansible.builtin.copy:
         dest: /etc/sudoers.d/wheel-nopasswd
         owner: root
@@ -133,19 +143,19 @@
         mode: "0440"
         content: |
           # Managed by aap-autodeploy-configascode
-          %wheel ALL=(ALL) NOPASSWD: ALL
+          {{ host_wheel_sudo_rule }}
         validate: /usr/sbin/visudo -cf %s
 
-    - name: Switch this run to ansible
+    - name: Switch this run to the automation account
       ansible.builtin.set_fact:
-        ansible_user: ansible
+        ansible_user: "{{ host_automation_user }}"
 
-    - name: Reconnect as ansible
+    - name: Reconnect as the automation account
       ansible.builtin.meta: reset_connection
 
     # Root login is turned off next; without this proof the host could be
     # left with no working login.
-    - name: Prove the ansible login and sudo
+    - name: Prove the automation account's login and sudo
       ansible.builtin.ping:
 
     - name: Run firewalld with the managed SSH port open

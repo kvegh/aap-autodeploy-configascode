@@ -7,7 +7,10 @@ and dropping the rest. See [README.md](README.md) for the full picture.
 Rule: configuration is separated from execution code. This repository holds
 execution code only; all configuration lives in the private companion
 repository's CaC (inventory variables of AutoDeploy-NGNG), with no defaults in
-the playbooks. There only real secrets are vault encrypted.
+the playbooks: accounts, sudo rules, host naming, ports, retry counts, the
+counter path and the CaC apply job's use case and ref included. Only
+third-party facts (software source URLs) stay in code. There only real
+secrets are vault encrypted.
 
 ## What exists today
 
@@ -20,10 +23,11 @@ Nine stages:
   deployment version (vXY) from the counter in the private repository and
   writes the number plus one back, adding the assigned version to the list of
   live instances.
-- `playbooks/02-host-dns-publish.yml`, four tasks, publishes the host name for
+- `playbooks/02-host-dns-publish.yml`, three tasks, publishes the host name for
   that version at GoDaddy and waits until public DNS resolves it.
 - `playbooks/03-host-access-bootstrap.yml`, twenty tasks, creates the
-  `ansible` and personal accounts, proves the `ansible` login and sudo, turns
+  automation account (`ansible`, from the CaC) and personal accounts with
+  their CaC sudo rules, proves the automation account's login and sudo, turns
   off root and password login minutes after the reinstall, limits login to the
   declared accounts, and moves SSH to the managed port (SELinux label,
   firewalld, proof on the new port, port recorded in the AAP inventory, public

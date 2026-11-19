@@ -9,8 +9,8 @@
 # before the reboot: the host access bootstrap proved login and sudo on the
 # managed port, and every module reports its own success.
 #
-# Runs as ansible on the port the host access bootstrap recorded in the AAP
-# inventory. There is no fallback to port 22 or root: a fallback would hide a
+# Runs as the automation account on the port the host access bootstrap
+# recorded in the AAP inventory. There is no fallback to port 22 or root: a fallback would hide a
 # broken SSH setup. The reboot module reconnects the same way, so its return already
 # proves the managed login after the boot.
 #

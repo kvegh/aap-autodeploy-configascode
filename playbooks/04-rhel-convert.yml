@@ -6,7 +6,7 @@
 # only EL7 and EL8 repositories, and the native tasks here are few.
 #
 # Required inventory: the rebuilt host in group autodeploy_target, reachable
-# over SSH as ansible, the account the host access bootstrap created.
+# over SSH as the automation account the host access bootstrap created.
 #
 # Required variables, injected by the Red Hat Subscription-NGNG credential:
 #   rhsm_org_id           Red Hat subscription organization ID

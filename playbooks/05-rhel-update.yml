@@ -7,7 +7,7 @@
 # A failed reboot fails the reboot module itself.
 #
 # Required inventory: the host in group autodeploy_target, reachable over SSH
-# as ansible, registered to Red Hat repositories.
+# as the automation account, registered to Red Hat repositories.
 
 - name: Update RHEL to the latest packages
   hosts: autodeploy_target

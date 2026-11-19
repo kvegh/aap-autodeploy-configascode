@@ -8,8 +8,10 @@
 # repository's default branch. Retiring an instance removes it from the list;
 # that is a separate job.
 #
-# Required variables, supplied by the job template and the Git write credential:
+# Required variables, supplied by the job template, the CaC inventory and the
+# Git write credential:
 #   counter_repository     private repository as owner/name
+#   counter_file_path      counter file in that repository, from the CaC inventory
 #   counter_git_username   GitHub account that owns the token
 #   counter_git_token      token with contents write access to that repository
 #
@@ -26,7 +28,7 @@
   gather_facts: false
   become: false
   vars:
-    counter_api_url: "https://api.github.com/repos/{{ counter_repository }}/contents/state/deployment_counter.yml"
+    counter_api_url: "https://api.github.com/repos/{{ counter_repository }}/contents/{{ counter_file_path }}"
     counter_next_pattern: '(?m)^autodeploy_deployment_counter_next: [0-9]+$'
     counter_live_pattern: '(?m)^autodeploy_deployment_instances_live: \[[0-9, ]*\]$'
   tasks:

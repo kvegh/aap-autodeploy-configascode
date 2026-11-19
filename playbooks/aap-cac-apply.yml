@@ -4,12 +4,14 @@
 # use case tree from the private repository, infra.aap_configuration.dispatch
 # applies it. Started by hand, from a job template or the command line.
 #
-# Inputs:
-#   cac_usecase            use case directory under usecases/ (default autodeploy)
+# Inputs, from the job template's extra variables; command line runs pass them
+# with -e (no defaults here):
+#   cac_usecase            use case directory under usecases/, e.g. autodeploy
 #   cac_repository_path    local checkout of the private repository; when set,
 #                          nothing is downloaded (command line runs)
 #   cac_repository         private repository as owner/name, for the download
-#   cac_repository_ref     branch, tag or commit to download (default main)
+#   cac_repository_ref     branch, tag or commit to download, e.g. main; only
+#                          needed for the download
 #   counter_git_username   GitHub account and token that can read the private
 #   counter_git_token      repository, from the credential
 #                          "GitHub AutoDeploy CaC Secrets-NGNG"
@@ -32,8 +34,6 @@
   gather_facts: false
   become: false
   vars:
-    cac_usecase: autodeploy
-    cac_repository_ref: main
     controller_configuration_filetree_read_layout: create
     aap_configuration_secure_logging: true
     aap_hostname: "{{ lookup('ansible.builtin.env', 'AAP_HOSTNAME') or lookup('ansible.builtin.env', 'CONTROLLER_HOST') }}"

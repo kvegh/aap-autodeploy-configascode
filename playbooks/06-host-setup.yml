@@ -4,8 +4,8 @@
 # One job: the stages below run in this order. Each stage is also a playbook of
 # its own in playbooks/host/ and can be run alone on a finished host.
 #
-# Inventory: the host in group autodeploy_target, reached as ansible on the
-# port recorded in the AAP inventory. Variables are listed in each stage's
+# Inventory: the host in group autodeploy_target, reached as the automation
+# account on the port recorded in the AAP inventory. Variables are listed in each stage's
 # header; all configuration comes from the CaC inventory, secrets from
 # credentials.
 

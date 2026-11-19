@@ -52,7 +52,7 @@ Refactored, reviewed and committed:
 |---|---|---|
 | Provider reinstall | 24 | 14 |
 | Deployment version | 34 | 5 |
-| Host DNS | about 45 | 4 |
+| Host DNS | about 45 | 3 |
 | Host access bootstrap | part of host setup | 20 |
 | Conversion to RHEL | about 120 | 14 |
 | RHEL update | about 20 | 2 |
@@ -69,15 +69,17 @@ the plaintext counter in the private repository, publishes it as
 `autodeploy_deployment_version` and writes the next number back, with the
 assigned version added to the list of live instances, through the GitHub
 contents API. The host DNS stage creates or corrects the name
-`<label>.vXY.<zone>` at GoDaddy and waits until public DNS returns the host
+`host_fqdn` (in the CaC: `<label>.vXY.<zone>`) at GoDaddy and waits until public DNS returns the host
 address. It never deletes names: older versions may still be live instances;
 the instance retire job removes them.
 
 The host access bootstrap runs as root on port 22, minutes after the
 reinstall, because the host is exposed to the internet from the start. It
-creates the `ansible` account (the AAP machine credential user) with its keys
-and passwordless sudo, and the personal accounts with their keys (admins in
-`wheel`, which gets passwordless sudo), proves login and sudo as `ansible`,
+creates the automation account `host_automation_user` (the AAP machine
+credential user, `ansible` in the CaC) with its keys and sudo rule, and the
+personal accounts with their keys (admins in `wheel`, which gets its own sudo
+rule; both rules come from the CaC), proves login and sudo as the automation
+account,
 then turns off root, password and keyboard-interactive login and limits login
 to the declared accounts (`AllowUsers`). All SSH configuration lives in this
 stage. Still on Rocky Linux, it also moves SSH to the managed port: the sshd
@@ -91,7 +93,7 @@ setup's libvirt network; nonlocal bind also covers boot), the run proves login
 and sudo on the managed port, records it as `ansible_port` on the AAP
 inventory host, then drops the public port 22 and closes it on the public
 zone. The bridge sits in firewalld's libvirt zone, which allows ssh. Every
-later stage runs as `ansible` on the managed port; the conversion is in place
+later stage runs as the automation account on the managed port; the conversion is in place
 and keeps it.
 
 The conversion stage updates Rocky Linux, runs `convert2rhel -y` with
@@ -119,7 +121,7 @@ running and enabled, the certificate renewal timer, libvirt networks and
 storage pools in their configured state with autostart, sysctl and KSM values,
 then from outside: port 22 is closed on the public address and a real root
 login on the managed port is refused. The web ports are not checked, since
-nginx runs only after WF2. It runs as `ansible` on the inventory port with no
+nginx runs only after WF2. It runs as the automation account on the inventory port with no
 fallback to port 22 or root. The old workflow ran a separate verify before
 the reboot as well; it is dropped, since the host access bootstrap proves
 login and sudo itself and only the run after the reboot shows something new.
@@ -142,16 +144,16 @@ certificates, AAP inventory entries, generated secrets, monitoring) adds its
 own cleanup step to this job when it is built. Removing the Red Hat
 registration is a planned follow-up that needs a Red Hat API token.
 
-The image download stage (`08-images-download.yml`) runs as `ansible` on the
-inventory port. If at least one image of the CaC list is missing, it first
-requires the configured free space (`images_min_free_gib`) on the filesystem that holds `/opt`
-(`images_min_free_gib`); with every image present the check is skipped, so a
+The image download stage (`08-images-download.yml`) runs as the automation
+account on the inventory port. If at least one image of the CaC list is
+missing, it first requires the configured free space (`images_min_free_gib`)
+on `/opt`, read with `df`; with every image present the check is skipped, so a
 rerun after a complete download does not fail on the space the images use.
 It then installs rclone, writes the Google Drive rclone configuration from
 the AAP credential "Google Drive rclone-NGNG" (the same Drive access
 production uses, kept on purpose for the demo environment), downloads each
 image of the CaC list `images_download` that is not there yet (`rclone
-copyto`, `creates:`, async with a 30 second poll) and requires the pinned SHA-256 of every image.
+copyto` with the CaC retry counts, `creates:`, async with a 30 second poll) and requires the pinned SHA-256 of every image.
 A file with a wrong checksum is not deleted automatically: the failure names
 it and says to delete it by hand and run the job again, because a rerun skips
 files that exist. Files keep root ownership and mode 0644; the image
@@ -209,7 +211,7 @@ assertions are read-only and safe to run at any time.
 ## Applying the CaC
 
 `playbooks/aap-cac-apply.yml` applies the CaC of one use case (`cac_usecase`,
-default `autodeploy`) with the Ansible Community of Practice collections
+for example `autodeploy`) with the Ansible Community of Practice collections
 `infra.aap_configuration` 4.11.1 and `infra.aap_configuration_extended`
 4.13.1. The private repository holds each use case as the tree the CoP export
 `filetree_create` writes, under `usecases/<use case>/`; the playbook loads its
@@ -222,11 +224,14 @@ What the job template needs (in AAP: "AutoDeploy-NGNG CaC apply"):
 - **Private repository.** An AAP job sees only its own project, so a second
   AAP project for the private repository is no use. The playbook downloads
   the repository itself: the GitHub contents API tarball of `cac_repository`
-  (owner/name) at `cac_repository_ref` (default `main`), with the account and
+  (owner/name) at `cac_repository_ref`, with the account and
   token of the existing credential "GitHub AutoDeploy CaC Secrets-NGNG"
   (`counter_git_username`, `counter_git_token`), into a scratch directory it
   removes at the end. On the command line, `cac_repository_path` points at a
-  local checkout instead and nothing is downloaded.
+  local checkout instead and nothing is downloaded. The playbook has no
+  defaults: the job template's extra variables set `cac_repository`,
+  `cac_repository_ref` (`main`) and `cac_usecase` (`autodeploy`); command
+  line runs pass them with `-e`.
 - **Vault password.** An AAP vault credential with the private repository's
   vault password; AAP passes it to `ansible-playbook`, which decrypts
   `env_variables.yml`.
@@ -243,6 +248,7 @@ What the job template needs (in AAP: "AutoDeploy-NGNG CaC apply"):
 Command line example:
 
     ansible-playbook playbooks/aap-cac-apply.yml \
+      -e cac_usecase=autodeploy \
       -e cac_repository_path=../aap-autodeploy-configascode-secrets \
       --vault-password-file <file>
 
