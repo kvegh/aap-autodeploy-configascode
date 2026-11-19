@@ -46,11 +46,11 @@ Refactored, reviewed and committed:
 | Provider reinstall | 24 | 14 |
 | Deployment version | 34 | 5 |
 | Host DNS | about 45 | 4 |
-| Host access bootstrap | part of host setup | 16 |
+| Host access bootstrap | part of host setup | 20 |
 | Conversion to RHEL | about 120 | 14 |
 | RHEL update | about 20 | 2 |
-| Host setup (10 stages) | about 368 | 40 + 6 handlers |
-| Reboot and verify | about 78 | 15 |
+| Host setup (8 stages) | about 368 | 32 + 5 handlers |
+| Reboot and verify | about 78 | 14 |
 | Image download | 68 | 9 |
 | Instance retire | 69 | 6 |
 
@@ -69,45 +69,53 @@ the instance retire job removes them.
 The host access bootstrap runs as root on port 22, minutes after the
 reinstall, because the host is exposed to the internet from the start. It
 creates the `ansible` account (the AAP machine credential user) with its keys
-and passwordless sudo, proves login and sudo as `ansible`, then turns off root,
-password and keyboard-interactive login. Still on Rocky Linux, it also moves
-SSH to the managed port: the sshd role labels the port `ssh_port_t` (SELinux
-enforces on the fresh installation), the firewall role makes sure firewalld
-runs, binds the public interface (the interface of the default IPv4 route) to
-the public zone and opens the managed port to everyone; sshd listens on port
-22 and the managed port, the run proves login and sudo on the managed port,
-records it as `ansible_port` on the AAP inventory host, then drops port 22 and
-closes it on the public zone. Every later stage runs as `ansible` on the
-managed port; the conversion is in place and keeps it.
+and passwordless sudo, and the personal accounts with their keys (admins in
+`wheel`, which gets passwordless sudo), proves login and sudo as `ansible`,
+then turns off root, password and keyboard-interactive login and limits login
+to the declared accounts (`AllowUsers`). All SSH configuration lives in this
+stage. Still on Rocky Linux, it also moves SSH to the managed port: the sshd
+role labels the port `ssh_port_t` (SELinux enforces on the fresh
+installation), the firewall role makes sure firewalld runs, binds the public
+interface (the interface of the default IPv4 route) to the public zone and
+opens the managed port to everyone; with `net.ipv4.ip_nonlocal_bind` set,
+sshd listens on the public address on port 22 and the managed port and on the
+internal libvirt bridge address on port 22 (the bridge appears with the host
+setup's libvirt network; nonlocal bind also covers boot), the run proves login
+and sudo on the managed port, records it as `ansible_port` on the AAP
+inventory host, then drops the public port 22 and closes it on the public
+zone. The bridge sits in firewalld's libvirt zone, which allows ssh. Every
+later stage runs as `ansible` on the managed port; the conversion is in place
+and keeps it.
 
 The conversion stage updates Rocky Linux, runs `convert2rhel -y` with
 temporary root-only credentials and proves the running kernel is Red Hat's.
 
 The RHEL update stage updates all packages and reboots if anything changed.
 
-The host setup (`06-host-setup.yml`) runs ten stages from `playbooks/host/`:
+The host setup (`06-host-setup.yml`) runs eight stages from `playbooks/host/`:
 base (EPEL, names, timezone, admin tools, hardware monitors), virtualization,
-SELinux (permissive), VM storage, libvirt networks, users, firewall (web
-ports), SSH, the web edge (nginx base, certbot, fail2ban) and tuning. The SSH
-stage leaves sshd on exactly two addresses, the public address on the managed
-port and the internal libvirt bridge on port 22 (with
-`net.ipv4.ip_nonlocal_bind`, so sshd binds the bridge at boot before libvirt
-creates it), and limits login to the declared accounts.
+SELinux (permissive), VM storage, libvirt networks, firewall (web ports), the
+web edge (nginx base, certbot, fail2ban) and tuning. The stage files keep
+their numbers; 06 (users) and 08 (SSH) moved into the host access bootstrap.
 fail2ban never bans our own public addresses. File templates live in the
 public repository; their values come from the private repository's CaC and
-vault. Use cases add their own nginx vhosts and fail2ban jails.
+vault. nginx is installed and configured but neither enabled nor started;
+the AAP deployment (WF2) starts it. fail2ban runs with the sshd jail only.
+Use cases add their own nginx vhosts, basic-auth files and fail2ban jails for
+their nginx logs.
 
 The reboot and verify stage (`07-host-reboot-verify.yml`) reboots the finished
 host and proves that the host setup survives a boot: SELinux mode, services
 running and enabled, the certificate renewal timer, libvirt networks and
 storage pools in their configured state with autostart, sysctl and KSM values,
-then from outside: ports 80 and 443 answer, port 22 is closed on the public
-address, and a real root login on the managed port is refused. It runs as
-`ansible` on the inventory port with no fallback to port 22 or root. The old
-workflow ran a separate verify before the reboot as well; it is dropped, since
-the host access bootstrap proves login and sudo itself and only the run after
-the reboot shows something new. Every value that a setup stage sets and this stage checks
-is defined once in `playbooks/vars/` and read by both.
+then from outside: port 22 is closed on the public address and a real root
+login on the managed port is refused. The web ports are not checked, since
+nginx runs only after WF2. It runs as `ansible` on the inventory port with no
+fallback to port 22 or root. The old workflow ran a separate verify before
+the reboot as well; it is dropped, since the host access bootstrap proves
+login and sudo itself and only the run after the reboot shows something new.
+Every value that a setup stage sets and this stage checks is defined once in
+`playbooks/vars/` and read by both.
 
 The instance retire job (`instance-retire.yml`) is not part of any deployment
 workflow. Several instances may be live at once, so a person names the
@@ -243,7 +251,7 @@ Command line example:
 | `reset_type: hardware` valid in community.hrobot 2.8.0 | yes (`software`, `hardware`, `power`, `manual`) |
 | APME (commit `9c4372f`, core 2.20; native, opa and ansible validators) | no defects; one lead open, deviations accepted below |
 | Executed against a real server | not done |
-| AAP job template and end-to-end test | deployment version: job template run successful; others not done |
+| AAP job templates and end-to-end test | WF1 00–08 job templates exist in AAP and the CaC; deployment version run successful; others not run, no end-to-end test yet |
 
 Accepted APME deviations:
 

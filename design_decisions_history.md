@@ -1,5 +1,53 @@
 # Design decisions history
 
+## WF1 base host trimmed: accounts and all SSH in the bootstrap, nginx installed but not started — 2026-11-18
+
+Decided with the user on 18 November 2026 (CET; exact times not recorded),
+implemented 19 November 2026, 05:50 CET (v0.0.30). The CaC values that go
+with it are in the private repository (v0.0.29).
+
+- Accounts and SSH: the personal account (`host_users`, keys, `wheel` with
+  passwordless sudo) is created by `03-host-access-bootstrap.yml` next to
+  `ansible`. All SSH configuration lives in that stage: `AllowUsers`
+  (`host_ssh_allow_users`, exactly `ansible` and the personal account) is in
+  the shared SSH settings from the first sshd change, so the login proof on
+  the managed port runs with it; `net.ipv4.ip_nonlocal_bind` is set before
+  sshd uses any address; the final listen addresses are the public address on
+  the managed port and the internal bridge address on port 22. The interim
+  `0.0.0.0` listen is gone: with nonlocal bind sshd listens on the public
+  address on 22 and the managed port plus the bridge during the transition;
+  the dual-port proof is unchanged. The bridge sits in firewalld's libvirt
+  zone (ssh allowed); the public zone still closes port 22.
+- `aap_hypervisor` leaves WF1 (user, keys, `AllowUsers` entry); it comes with
+  the AAP installation in WF2.
+- The host setup stages `06-users.yml` and `08-sshd.yml` are removed; the
+  other stage files keep their numbers. The host setup has eight stages,
+  32 tasks and 5 handlers; the bootstrap has 20 tasks.
+- Web edge: nginx is installed and configured (base config, shared
+  dhparams) but neither enabled nor started; WF2 starts it. The reload
+  handler is gone (a reload of a stopped unit starts it); `nginx -t` stays.
+  The shared basic-auth file (`host_nginx_htpasswd`) is no longer installed:
+  the AIOps project, its only user, installs it with its own vhost.
+- fail2ban keeps only the sshd jail (journal backend, no log file needed).
+  The nginx jails and the `nginx-444` filter move to the AIOps project.
+  Checked before removing: the EL9 nginx package ships its log files as
+  `%ghost` (not created on install), and fail2ban 1.1.0 (EPEL 9) refuses its
+  configuration when a jail finds no log file, so those jails would have
+  broken fail2ban on a host where nginx never ran.
+- Reboot and verify: nginx is no longer an expected running service, and the
+  check that ports 80 and 443 answer from outside is removed, since nothing
+  listens there until WF2. It has 14 tasks.
+- Open: `nginx_rate_limit_zone` and `nginx_rate_limit_rate` (nginx base
+  `limits.conf`) are still not set in the CaC; a WF1 rerun after WF2 changes
+  the nginx base config without reloading nginx.
+
+Checks: strict ansible-lint (production profile) 0 failures, 0 warnings on
+the whole repository against the pinned collections; syntax check of the
+bootstrap, host setup, web edge and reboot verify playbooks inside
+`ee-proj-aap-cac@sha256:e6451a10…`, no deprecation warnings; render check of
+the CaC in the same EE (accounts, `AllowUsers`, transitional and final
+listen addresses). APME was not rerun. Not executed against a server.
+
 ## WF1 job templates named `AutoDeploy-NGNG WF1 NN <step>` — 2026-11-18
 
 Decided with the user on 18 November 2026 (CET; exact time not recorded),

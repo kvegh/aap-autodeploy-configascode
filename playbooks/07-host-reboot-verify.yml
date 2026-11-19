@@ -1,13 +1,13 @@
 ---
 # Reboot the finished hypervisor and prove that the host setup survives a boot.
 #
-# Host setup writes state that only a boot exercises: service enablement, the
-# rasdaemon drop-in, sysctl.d, tmpfiles.d for KSM, libvirt autostart, the sshd
-# drop-in, permanent firewall rules and the SELinux configuration. Every module
-# reports success at setup time; the rasdaemon start race was only visible
-# after a reboot. There is no check before the reboot: the host access
-# bootstrap proved login and sudo on the managed port, and every module
-# reports its own success.
+# Host setup and the host access bootstrap write state that only a boot
+# exercises: service enablement, the rasdaemon drop-in, sysctl.d, tmpfiles.d
+# for KSM, libvirt autostart, the sshd drop-in, permanent firewall rules and
+# the SELinux configuration. Every module reports success at setup time; the
+# rasdaemon start race was only visible after a reboot. There is no check
+# before the reboot: the host access bootstrap proved login and sudo on the
+# managed port, and every module reports its own success.
 #
 # Runs as ansible on the port the host access bootstrap recorded in the AAP
 # inventory. There is no fallback to port 22 or root: a fallback would hide a
@@ -126,17 +126,8 @@
         label: "{{ item.source }}"
 
     # The network checks run last and from the execution environment, so they
-    # also prove the permanent firewall rules.
-    - name: Require the web ports to answer from outside
-      ansible.builtin.wait_for:
-        host: "{{ dns_host_ipv4 }}"
-        port: "{{ item }}"
-        state: started
-        timeout: 30
-      loop: [80, 443]
-      delegate_to: localhost
-      become: false
-
+    # also prove the permanent firewall rules. The web ports are not checked:
+    # nginx does not run until WF2 starts it.
     - name: Require port 22 closed on the public address from outside
       ansible.builtin.wait_for:
         host: "{{ dns_host_ipv4 }}"

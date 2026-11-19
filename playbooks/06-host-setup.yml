@@ -23,14 +23,8 @@
 - name: Libvirt networks
   ansible.builtin.import_playbook: host/05-libvirt-networks.yml
 
-- name: Users
-  ansible.builtin.import_playbook: host/06-users.yml
-
 - name: Firewall
   ansible.builtin.import_playbook: host/07-firewall.yml
-
-- name: SSH listen addresses and allowed users
-  ansible.builtin.import_playbook: host/08-sshd.yml
 
 - name: Web edge
   ansible.builtin.import_playbook: host/09-web-edge.yml

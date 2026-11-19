@@ -17,22 +17,24 @@ Nine stages:
   live instances.
 - `playbooks/02-host-dns-publish.yml`, four tasks, publishes the host name for
   that version at GoDaddy and waits until public DNS resolves it.
-- `playbooks/03-host-access-bootstrap.yml`, sixteen tasks, creates the
-  `ansible` account, proves its login and sudo, turns off root and password
-  login minutes after the reinstall, and moves SSH to the managed port (SELinux
-  label, firewalld, proof on the new port, port recorded in the AAP inventory,
-  port 22 closed), still on Rocky Linux, so every later stage runs on it.
+- `playbooks/03-host-access-bootstrap.yml`, twenty tasks, creates the
+  `ansible` and personal accounts, proves the `ansible` login and sudo, turns
+  off root and password login minutes after the reinstall, limits login to the
+  declared accounts, and moves SSH to the managed port (SELinux label,
+  firewalld, proof on the new port, port recorded in the AAP inventory, public
+  port 22 closed, port 22 kept on the internal bridge), still on Rocky Linux,
+  so every later stage runs on it. All SSH configuration lives here.
 - `playbooks/04-rhel-convert.yml`, fourteen tasks, converts Rocky Linux 9 to
   RHEL 9 with `convert2rhel` and proves a Red Hat kernel runs.
 - `playbooks/05-rhel-update.yml`, two tasks, updates all packages and reboots
   if anything changed.
-- `playbooks/06-host-setup.yml`, 40 tasks in ten stages, configures the
-  hypervisor: base, virtualization, SELinux, storage, networks, users,
-  firewall (web ports), SSH (managed port on the public address only, port 22
-  on the internal bridge, allowed users), web edge and tuning.
-- `playbooks/07-host-reboot-verify.yml`, fifteen tasks, reboots the host and
+- `playbooks/06-host-setup.yml`, 32 tasks in eight stages, configures the
+  hypervisor: base, virtualization, SELinux, storage, networks, firewall (web
+  ports), web edge (nginx installed, not started; fail2ban with the sshd jail)
+  and tuning.
+- `playbooks/07-host-reboot-verify.yml`, fourteen tasks, reboots the host and
   proves the setup survived the boot: SELinux, services, libvirt networks and
-  pools, kernel values, web ports open, port 22 closed and root login refused
+  pools, kernel values, port 22 closed and root login refused
   from outside. Expected values are shared with the setup stages.
 - `playbooks/08-images-download.yml`, nine tasks, requires 80 GiB free on
   `/opt` when an image is missing, installs rclone, downloads each missing VM

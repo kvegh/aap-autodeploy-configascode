@@ -10,8 +10,8 @@ host_base_services: [sysstat, smartd, rasdaemon]
 # are derived from these names there.
 host_libvirt_daemons: [virtqemud, virtnetworkd, virtstoraged]
 
-# Web edge stage.
-host_web_edge_services: [nginx, fail2ban]
+# Web edge stage. nginx is installed but not started; WF2 starts it.
+host_web_edge_services: [fail2ban]
 host_web_edge_timers: [certbot-renew.timer]
 
 # Every service the check requires. firewalld is started and enabled by the

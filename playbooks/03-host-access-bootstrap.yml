@@ -1,6 +1,6 @@
 ---
-# Create the ansible account, turn off root login and move SSH to the managed
-# port, minutes after the reinstall.
+# Create the ansible and personal accounts, turn off root login and move SSH
+# to the managed port, minutes after the reinstall.
 #
 # The host is exposed to the internet from the moment the provider has
 # installed it, with root login by key on port 22. The previous implementation
@@ -11,19 +11,26 @@
 #
 # ansible gets passwordless sudo: it logs in by key only, so a sudo password
 # would add little and would have to be stored and injected as one more secret.
+# The personal accounts (host_users) are created here too, with their keys;
+# admins are members of wheel, which gets passwordless sudo for the same
+# reason. AllowUsers is part of the SSH settings from the first change on, so
+# the login proof on the managed port runs with it in force.
 #
-# The move to the managed port happens here, still on Rocky Linux, so the
-# conversion, update and setup stages already run on it. The conversion is in
-# place and keeps the setting. sshd first listens on port 22 and the managed
-# port; the run switches to the managed port, proves login plus sudo and
-# records the port in the AAP inventory for later jobs. Only after that does
-# sshd drop port 22 and the firewall close it on the public zone. If the proof
+# All SSH configuration of the hypervisor lives here. The move to the managed
+# port happens still on Rocky Linux, so the conversion, update and setup
+# stages already run on it. The conversion is in place and keeps the setting.
+# sshd first listens on the public address on port 22 and on the managed port;
+# the run switches to the managed port, proves login plus sudo and records the
+# port in the AAP inventory for later jobs. Only after that does sshd drop the
+# public port 22 and the firewall close it on the public zone. If the proof
 # fails, port 22 still works and the host can be fixed without a reinstall.
 #
-# sshd listens on all IPv4 addresses here, not on the public address: without
-# net.ipv4.ip_nonlocal_bind, which the SSH stage of the host setup sets, sshd
-# could start at boot before the address is up and listen nowhere. The SSH
-# stage narrows it to the public address and adds the internal bridge.
+# sshd also listens on the internal libvirt bridge address on port 22, where
+# the VMs reach the hypervisor. The bridge only appears when the host setup
+# creates the libvirt network, and at boot sshd may start before the public
+# address or the bridge is up, so net.ipv4.ip_nonlocal_bind is set first and
+# sshd binds both addresses regardless. The bridge goes into firewalld's
+# libvirt zone, which allows ssh; the public zone never opens port 22 for it.
 #
 # SELinux enforces on the provider's Rocky Linux, so the sshd role labels the
 # managed port ssh_port_t before sshd binds it. firewalld may be missing or
@@ -40,8 +47,15 @@
 # installed for root (robot_ssh_keys) and one of the keys listed for ansible.
 #
 # Required variables:
-#   host_authorized_keys   vault: dict user name -> list of public keys; uses 'ansible'
+#   host_authorized_keys   vault: dict user name -> list of public keys, for
+#                          ansible and every account in host_users
+#   host_users             vault: personal accounts, list of {name, groups};
+#                          admins include wheel
+#   host_ssh_allow_users   vault: accounts allowed to log in: ansible and the
+#                          accounts in host_users
 #   host_ssh_port          vault: managed SSH port
+#   dns_host_ipv4          vault: public IPv4 of the host, as for the host DNS stage
+#   net_internal           vault: the internal network; its address is the bridge's
 #   aap_inventory_name     AAP inventory that holds this host under its inventory name
 #   host_bootstrap_user    optional, login of the fresh installation, default
 #                          root. Set it to ansible to rerun this stage once root
@@ -51,7 +65,7 @@
 # Automation Platform credential, which hands the controller URL and login to
 # ansible.controller as environment variables.
 
-- name: Create the ansible account, turn off root login and move SSH to the managed port
+- name: Create the accounts, turn off root login and move SSH to the managed port
   hosts: autodeploy_target
   become: true
   # The machine credential logs in as ansible, which does not exist yet on a
@@ -60,6 +74,7 @@
   vars:
     ansible_user: "{{ host_bootstrap_user | default('root') }}"
     host_sshd_bootstrap_settings: "{{ host_sshd_hardening | combine({'Port': host_ssh_port | int}) }}"
+    host_sshd_final_listen: ["{{ dns_host_ipv4 }}:{{ host_ssh_port }}", "{{ net_internal.address }}:22"]
   vars_files:
     - vars/sshd-hardening.yml
   tasks:
@@ -84,6 +99,37 @@
         content: |
           # Managed by aap-autodeploy-configascode
           ansible ALL=(ALL) NOPASSWD: ALL
+        validate: /usr/sbin/visudo -cf %s
+
+    - name: Create the personal accounts with exact groups
+      ansible.builtin.user:
+        name: "{{ item.name }}"
+        groups: "{{ item.groups | default([]) }}"
+        append: false
+        state: present
+      loop: "{{ host_users }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Allow exactly the declared SSH keys for the personal accounts
+      ansible.posix.authorized_key:
+        user: "{{ item.name }}"
+        key: "{{ host_authorized_keys[item.name] | join('\n') }}"
+        exclusive: true
+        state: present
+      loop: "{{ host_users }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Allow passwordless sudo for wheel
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/wheel-nopasswd
+        owner: root
+        group: root
+        mode: "0440"
+        content: |
+          # Managed by aap-autodeploy-configascode
+          %wheel ALL=(ALL) NOPASSWD: ALL
         validate: /usr/sbin/visudo -cf %s
 
     - name: Switch this run to ansible
@@ -114,9 +160,19 @@
             permanent: true
             runtime: true
 
+    # sshd binds the public and bridge addresses even when they are not up
+    # yet: at boot, and the bridge until the host setup creates it.
+    - name: Let sshd bind addresses that are not up yet
+      ansible.posix.sysctl:
+        name: net.ipv4.ip_nonlocal_bind
+        value: "1"
+        sysctl_file: /etc/sysctl.d/80-sshd-nonlocal-bind.conf
+        sysctl_set: true
+        reload: true
+
     # Port is only read by the role to label the managed port ssh_port_t in
     # SELinux; each ListenAddress carries its own port.
-    - name: Turn off root and password login, listen on port 22 and the managed port
+    - name: Turn off root and password login, allow the declared accounts, add the managed port
       ansible.builtin.include_role:
         name: redhat.rhel_system_roles.sshd
       vars:
@@ -124,7 +180,7 @@
         sshd_manage_selinux: true
         sshd_config: >-
           {{ host_sshd_bootstrap_settings | combine({'ListenAddress':
-          ['0.0.0.0:22', '0.0.0.0:' ~ host_ssh_port]}) }}
+          [dns_host_ipv4 ~ ':22'] + host_sshd_final_listen}) }}
 
     - name: Apply the transitional SSH configuration now
       ansible.builtin.meta: flush_handlers
@@ -155,13 +211,13 @@
       delegate_to: localhost
       become: false
 
-    - name: Listen on the managed port only
+    - name: Listen on the public managed port and the bridge only
       ansible.builtin.include_role:
         name: redhat.rhel_system_roles.sshd
       vars:
         sshd_config_file: "{{ host_sshd_config_file }}"
         sshd_manage_selinux: true
-        sshd_config: "{{ host_sshd_bootstrap_settings | combine({'ListenAddress': ['0.0.0.0:' ~ host_ssh_port]}) }}"
+        sshd_config: "{{ host_sshd_bootstrap_settings | combine({'ListenAddress': host_sshd_final_listen}) }}"
 
     - name: Apply the final SSH configuration now
       ansible.builtin.meta: flush_handlers

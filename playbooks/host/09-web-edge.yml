@@ -2,19 +2,21 @@
 # The internet-facing part of the hypervisor: nginx as the front door,
 # certbot for its certificates, fail2ban to ban abusers.
 #
-# Base only. Every use case brings its own nginx vhost (conf.d), certificate
-# and, if it needs one, its own fail2ban jail (jail.d). Use case vhosts
-# reference the shared /etc/letsencrypt/ssl-dhparams.pem and must not include
-# certbot's options-ssl-nginx.conf, which is not installed.
+# Base only. nginx is installed and configured but neither enabled nor
+# started: the AAP deployment (WF2) starts it. fail2ban runs with the sshd
+# jail only. Every use case brings its own nginx vhost (conf.d), certificate,
+# basic-auth file and fail2ban jails for its nginx logs (jail.d). Use case
+# vhosts reference the shared /etc/letsencrypt/ssl-dhparams.pem and must not
+# include certbot's options-ssl-nginx.conf, which is not installed.
 #
 # Required variables:
-#   host_nginx_htpasswd       vault: content of the shared basic-auth file
 #   nginx_rate_limit_zone     name of the login rate limit zone, e.g. aap_login
 #   nginx_rate_limit_rate     e.g. 6r/m
 #   host_ssh_port             vault: managed SSH port, for the sshd jail
 #   host_trusted_public_ips   vault: public IPs of our own hosts and AAP, never banned
 #
-# The fail2ban jails are defined below; they hold nothing secret.
+# The fail2ban jail is defined below; it holds nothing secret. The sshd jail
+# reads the journal (the RHEL default backend), so it needs no log file.
 
 - name: Configure the web edge
   hosts: autodeploy_target
@@ -35,31 +37,13 @@
         enabled: "true"
         port: "{{ host_ssh_port }}"
         maxretry: 4
-      nginx-http-auth:
-        enabled: "true"
-        logpath: /var/log/nginx/error.log
-        maxretry: 5
-      nginx-botsearch:
-        enabled: "true"
-        logpath: /var/log/nginx/access.log
-        maxretry: 2
-      # Bans clients that nginx answers with 444: requests for unknown names,
-      # typically scanners hitting the address directly.
-      nginx-444:
-        enabled: "true"
-        logpath: /var/log/nginx/access.log
-        maxretry: 2
   handlers:
+    # nginx is not running here, so there is nothing to reload; a reload
+    # would start it. The test only proves the configuration loads.
     - name: Check the nginx configuration
       ansible.builtin.command:
         argv: [nginx, -t]
       changed_when: false
-      notify: Reload nginx
-
-    - name: Reload nginx
-      ansible.builtin.systemd_service:
-        name: nginx
-        state: reloaded
 
     # Handlers run in the order listed here, so the test runs before the
     # reload; if it fails, the reload does not happen. No module validates
@@ -92,16 +76,6 @@
         - {src: 00-default.conf.j2, dest: /etc/nginx/conf.d/00-default.conf}
       notify: Check the nginx configuration
 
-    - name: Install the shared basic-auth file
-      ansible.builtin.copy:
-        dest: /etc/nginx/.htpasswd
-        content: "{{ host_nginx_htpasswd }}"
-        owner: root
-        group: nginx
-        mode: "0640"
-      no_log: true
-      notify: Check the nginx configuration
-
     # One public file for all vhosts: the standard RFC 7919 ffdhe2048 group.
     # It holds no secret; each vhost keeps its own certificate and key.
     - name: Install the shared Diffie-Hellman parameters
@@ -120,18 +94,7 @@
         group: root
         mode: "0755"
 
-    - name: Install the fail2ban filter for nginx 444 answers
-      ansible.builtin.copy:
-        src: files/nginx-444.conf
-        dest: /etc/fail2ban/filter.d/nginx-444.conf
-        owner: root
-        group: root
-        mode: "0644"
-      notify:
-        - Test the fail2ban configuration
-        - Reload fail2ban
-
-    - name: Install the fail2ban jails
+    - name: Install the fail2ban jail
       ansible.builtin.template:
         src: templates/fail2ban-jails.local.j2
         dest: /etc/fail2ban/jail.d/hypervisor.local
@@ -142,9 +105,7 @@
         - Test the fail2ban configuration
         - Reload fail2ban
 
-    # The configuration handlers run after all tasks, so starting nginx here
-    # rather than earlier changes nothing.
-    - name: Start nginx, fail2ban and certificate renewal at boot
+    - name: Start fail2ban and certificate renewal at boot
       ansible.builtin.systemd_service:
         name: "{{ item }}"
         enabled: true
