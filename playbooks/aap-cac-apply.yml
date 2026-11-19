@@ -11,8 +11,8 @@
 #   cac_repository         private repository as owner/name, for the download
 #   cac_repository_ref     branch, tag or commit to download (default main)
 #   counter_git_username   GitHub account and token that can read the private
-#   counter_git_token      repository, from the "GitHub Counter Writer-NGNG"
-#                          credential
+#   counter_git_token      repository, from the credential
+#                          "GitHub AutoDeploy CaC Secrets-NGNG"
 #
 # AAP connection: from the "Red Hat Ansible Automation Platform" credential's
 # environment variables. The ansible.controller modules read the login

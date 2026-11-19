@@ -68,6 +68,14 @@ companion repository.
   `images_download_timeout` (default 21600 s) times the number of images
   (5) plus an hour for the checksums, so it never cuts off a download that
   is still inside its own limit.
+- The GitHub credential is renamed from "GitHub Counter Writer-NGNG" to
+  "GitHub AutoDeploy CaC Secrets-NGNG" (user decision, 18 November 2026,
+  CET): it is the general read/write token for the private repository; the
+  deployment version step writes the counter with it and
+  `playbooks/aap-cac-apply.yml` reads the tree with it. The playbook's
+  header and the README refer to the new name (v0.0.31); private CaC commit
+  `3f39469` (v0.0.30). The variables `counter_git_username` and
+  `counter_git_token` keep their names.
 
 ## Managed SSH port set in the host access bootstrap, public NIC detected, hactar-ng as test host — 2026-11-18
 

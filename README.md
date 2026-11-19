@@ -216,7 +216,7 @@ What the job template needs:
   AAP project for the private repository is no use. The playbook downloads
   the repository itself: the GitHub contents API tarball of `cac_repository`
   (owner/name) at `cac_repository_ref` (default `main`), with the account and
-  token of the existing credential "GitHub Counter Writer-NGNG"
+  token of the existing credential "GitHub AutoDeploy CaC Secrets-NGNG"
   (`counter_git_username`, `counter_git_token`), into a scratch directory it
   removes at the end. On the command line, `cac_repository_path` points at a
   local checkout instead and nothing is downloaded.
