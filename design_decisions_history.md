@@ -1,5 +1,51 @@
 # Design decisions history
 
+## AAP VM create stage, deployment version input, retire of the VM — 2026-11-19
+
+Decided by the user on 19 November 2026 (CET; exact times in bead
+bead-wd-0gnz.41), implemented 19 November 2026. Public implementation commit
+`470b68d` (v0.0.42); private CaC commit `d778bd3` (v0.0.42). Job template 206 —
+AutoDeploy-NGNG 09 AAP VM create created through the API (inventory
+AutoDeploy-NGNG, project 193, EE ee-proj-aap-cac, Credential 62); Project 193
+synced once (update 5259). No CaC apply, no job launched, no workflow changed.
+
+User decisions:
+- Image: the golden image `/opt/images/goldimg-vm-1.disk.qcow2` (step 08),
+  copied into the vms pool.
+- Old baseline technologies only: copy (`remote_src`), `qemu-img resize`
+  (60G), `virt-customize`, virt-install (here through
+  `community.libvirt.virt_install`). No cloud-init. Filesystem growth stays in
+  the later installation step.
+- virt-customize: FQDN as host name; the automation account with the key of
+  Credential 62 (public key from `host_authorized_keys`) and its sudo rule as
+  in the host access bootstrap; empty machine-id, `subscription-manager
+  clean`, SELinux relabel. No host-key generation or pinning (host-key
+  checking off).
+- virt-install: sizes from the CaC (4 vCPU, 20480 MiB, 60G), network
+  `internal`, fixed MAC read from the reservation `aap` in
+  `net_internal.reservations`, autostart, RHEL 9 OS type (virtio).
+- Naming: `aap27-vXY`, FQDN `aap27.vXY.<dns_zone>`; the AAP version
+  (`aap_version_short`) is CaC config.
+- Deployment version: optional launch variable `deployment_version`
+  (neutral name, chosen by the implementing agent); set, it must be live and
+  is published without drawing; empty, step 01 draws as before.
+- Access: static CaC inventory host with ProxyCommand through hactar-ng and
+  the same credential for both hops. Not built: a static host name cannot
+  carry the version (open question to the user).
+- No firewall rule VM to hypervisor.
+- Retire: AAP VM (destroy and undefine) and its disk removed per retired
+  version, before DNS and the live list; the play stops the whole run on
+  failure.
+- After create: wait for the connection through the jump and a login plus
+  sudo check. Not built, depends on the inventory host above.
+
+Implementer choices: playbook name `09-aap-vm-create.yml`; reruns skip resize
+and virt-customize once `/etc/libvirt/qemu/<name>.xml` exists; disk keeps the
+image's mode (`mode: preserve`); osinfo `rhel9.0` (not checked against
+hactar-ng's osinfo-db); JT timeout 3600 s. Checks: ansible-lint production
+strict 0/0; render tests of the version expression, the virt-customize
+arguments and the CaC templates under loop variables.
+
 ## AAP host CA trust playbook removed — 2026-11-19
 
 19 November 2026, approved by the user. The CA was added to the AAP host's
