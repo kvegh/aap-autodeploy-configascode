@@ -1,5 +1,13 @@
 # Design decisions history
 
+## Reboot check: libvirt daemons need not be running — 2026-11-19
+
+19 November 2026, 11:30 CET, within the user's run authorization; found by reading
+step 07 before its first run. RHEL 9's modular libvirt daemons are socket-activated
+and exit after 120 s idle, so asserting them "running" after the reboot could fail
+on a healthy host. Step 07 now requires them enabled only; its network and pool
+reads already prove they answer.
+
 ## CaC apply uses a fixed async dir — 2026-11-19
 
 Implemented 19 November 2026, 10:22 CET. Public commit `b9b6312` (v0.0.39).

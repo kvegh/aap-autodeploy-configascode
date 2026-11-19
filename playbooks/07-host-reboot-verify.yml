@@ -76,12 +76,14 @@
           - (ansible_facts['selinux']['mode'] | default('disabled')) == host_selinux_state
         fail_msg: SELinux does not run in the configured mode after the boot.
 
+    # The libvirt daemons are socket-activated and exit after 120 s idle, so
+    # "running" is not required; the network and pool reads above prove they answer.
     - name: Require the services running and enabled
       ansible.builtin.assert:
         that:
           - (item ~ '.service') in ansible_facts['services']
           - ansible_facts['services'][item ~ '.service']['status'] == 'enabled'
-          - ansible_facts['services'][item ~ '.service']['state'] == 'running' or item in host_oneshot_services
+          - ansible_facts['services'][item ~ '.service']['state'] == 'running' or item in host_oneshot_services + host_libvirt_daemons
         fail_msg: "{{ item }} is not running and enabled after the boot."
       loop: "{{ host_boot_services }}"
 
