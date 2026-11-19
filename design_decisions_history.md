@@ -3,8 +3,8 @@
 ## Remaining self-defined configuration moved to the CaC; two simplifications — 2026-11-19
 
 Decided by the user on 19 November 2026 (CET; exact time not recorded),
-implemented 19 November 2026, 06:51 CET (v0.0.37). Implementation commit IDs
-follow in a later commit. Settles the points the previous entry left open.
+implemented 19 November 2026, 06:51 CET (v0.0.37). Implementation commit
+`01d5ec5`; the private repository's CaC commit is `2c0c96a` (v0.0.36). Settles the points the previous entry left open.
 
 - Moved into the CaC (inventory AutoDeploy-NGNG, plain), no defaults in code:
   - automation account name: `host_automation_user` (`ansible`, the user of
