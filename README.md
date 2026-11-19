@@ -254,7 +254,7 @@ Command line example:
 | `reset_type: hardware` valid in community.hrobot 2.8.0 | yes (`software`, `hardware`, `power`, `manual`) |
 | APME (commit `9c4372f`, core 2.20; native, opa and ansible validators) | no defects; one lead open, deviations accepted below |
 | Executed against a real server | not done |
-| AAP job templates and end-to-end test | WF1 00–08 job templates exist in AAP and the CaC; deployment version run successful; others not run, no end-to-end test yet |
+| AAP job templates, workflow and end-to-end test | WF1 00–08 job templates and the workflow "AutoDeploy-NGNG WF1" exist in AAP and the CaC; deployment version run successful; workflow and other templates not run, no end-to-end test yet |
 
 Accepted APME deviations:
 

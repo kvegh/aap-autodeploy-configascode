@@ -1,5 +1,30 @@
 # Design decisions history
 
+## WF1 workflow template — 2026-11-19
+
+Requested by the user on 18 November 2026 (CET; exact time not recorded),
+implemented 19 November 2026, 06:05 CET (v0.0.34). No playbook change; the
+workflow is defined in the private repository's CaC.
+
+- Workflow 203 — AutoDeploy-NGNG WF1 chains the job templates WF1 00 to 08
+  strictly on success, no failure or always branches: no playbook header asks
+  for a cleanup step, and the reinstall stage must never be retried
+  automatically. Simultaneous runs are not allowed.
+- The workflow carries the same three-question survey as the reinstall job
+  template (server number, IPv4, `ERASE <number>`). Workflow survey answers
+  reach every node as extra variables, so the operator confirms once per run;
+  storing answers on the node would remove the confirmation. The reinstall
+  playbook still checks them against the configured target.
+- The deployment version passes from node 01 to later nodes as a `set_stats`
+  artifact (`autodeploy_deployment_version`), used by the host DNS stage and
+  the base host stage inside host setup. This is the documented interface:
+  after node 01 the counter holds the next number and all live versions, so
+  later nodes cannot tell this run's version from it. No other node
+  publishes or consumes artifacts.
+- Project 193 — AAP AutoDeploy-NGNG was updated to `9f3e5d3` (project update
+  5145, successful) before the workflow was created. The workflow was not
+  launched: node 00 erases a live server.
+
 ## WF1: login rate limit moves to WF2, storage stage creates /opt/images — 2026-11-19
 
 Decided with the user on 19 November 2026 (CET; exact time not recorded),
