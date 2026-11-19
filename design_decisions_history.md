@@ -4,7 +4,7 @@
 
 Decided by the user on 19 November 2026 (CET; exact time not recorded),
 implemented 19 November 2026, 06:20 CET (v0.0.36). Implementation commit
-recorded in a follow-up commit. Supersedes the 2026-11-19 choice of a fixed
+`e7b2bf2`; the private repository's CaC commit is `540a2e2` (v0.0.35). Supersedes the 2026-11-19 choice of a fixed
 play variable for `/opt/images` in `04-storage.yml` and the shared
 `playbooks/vars/` files.
 
