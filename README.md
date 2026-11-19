@@ -94,13 +94,16 @@ The RHEL update stage updates all packages and reboots if anything changed.
 
 The host setup (`06-host-setup.yml`) runs eight stages from `playbooks/host/`:
 base (EPEL, names, timezone, admin tools, hardware monitors), virtualization,
-SELinux (permissive), VM storage, libvirt networks, firewall (web ports), the
-web edge (nginx base, certbot, fail2ban) and tuning. The stage files keep
+SELinux (permissive), VM storage (the pool directories and the plain image
+directory `/opt/images`, `root:libvirt` 2775), libvirt networks, firewall
+(web ports), the web edge (nginx base, certbot, fail2ban) and tuning. The stage files keep
 their numbers; 06 (users) and 08 (SSH) moved into the host access bootstrap.
 fail2ban never bans our own public addresses. File templates live in the
 public repository; their values come from the private repository's CaC and
 vault. nginx is installed and configured but neither enabled nor started;
-the AAP deployment (WF2) starts it. fail2ban runs with the sshd jail only.
+the AAP deployment (WF2) starts it and brings the AAP login rate limit
+(`limit_req_zone` in `conf.d`, used by the AAP vhost). fail2ban runs with the
+sshd jail only.
 Use cases add their own nginx vhosts, basic-auth files and fail2ban jails for
 their nginx logs.
 

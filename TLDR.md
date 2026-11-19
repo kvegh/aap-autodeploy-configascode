@@ -29,9 +29,9 @@ Nine stages:
 - `playbooks/05-rhel-update.yml`, two tasks, updates all packages and reboots
   if anything changed.
 - `playbooks/06-host-setup.yml`, 32 tasks in eight stages, configures the
-  hypervisor: base, virtualization, SELinux, storage, networks, firewall (web
-  ports), web edge (nginx installed, not started; fail2ban with the sshd jail)
-  and tuning.
+  hypervisor: base, virtualization, SELinux, storage (pools and
+  `/opt/images`), networks, firewall (web ports), web edge (nginx installed,
+  not started, no login rate limit; fail2ban with the sshd jail) and tuning.
 - `playbooks/07-host-reboot-verify.yml`, fourteen tasks, reboots the host and
   proves the setup survived the boot: SELinux, services, libvirt networks and
   pools, kernel values, port 22 closed and root login refused

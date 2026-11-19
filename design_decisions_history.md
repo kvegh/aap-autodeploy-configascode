@@ -1,5 +1,41 @@
 # Design decisions history
 
+## WF1: login rate limit moves to WF2, storage stage creates /opt/images — 2026-11-19
+
+Decided with the user on 19 November 2026 (CET; exact time not recorded),
+implemented 19 November 2026, 06:00 CET (v0.0.33). Implementation commit
+recorded in a follow-up commit. No CaC change in the private repository.
+
+- The nginx login rate limit leaves WF1: it protects AAP's login, so it
+  comes with WF2, like starting nginx. `09-web-edge.yml` no longer renders
+  `conf.d/limits.conf`, `templates/limits.conf.j2` is removed, and
+  `nginx_rate_limit_zone` / `nginx_rate_limit_rate` are no longer required.
+  This closes the open item that these two were not set in the CaC.
+  `nginx.conf.j2` never referenced the zone; the remaining base config
+  (`nginx.conf`, `00-default.conf`) passes `nginx -t` (nginx 1.24, UBI 9).
+  WF2 must bring back: `/etc/nginx/conf.d/limits.conf` with
+  `limit_req_zone $binary_remote_addr zone=<zone>:10m rate=<rate>;` and the
+  AAP vhost's `limit_req zone=<zone> burst=<burst> nodelay;` plus
+  `limit_req_status 429;` on the login locations, as the old production
+  templates do. A host already set up by an earlier WF1 run keeps its
+  `limits.conf`; WF1 does not delete it.
+- The storage stage also creates `/opt/images` as in production: `root`,
+  group `libvirt`, mode `2775`, SELinux type `virt_image_t` (label rule and
+  directory, in the same two tasks as the pool directories). It is a plain
+  directory, not a libvirt pool. Simplest form chosen: a fixed play variable
+  in `04-storage.yml`, no new CaC setting, since the path and owner are fixed
+  production layout. The libvirt group comes with the virtualization
+  stage's packages. The task count is unchanged (32 tasks, 5 handlers).
+  `08-images-download.yml` already says the directories, label and owner
+  come from the storage stage; its CaC destinations are under `/opt/images`.
+  `07-host-reboot-verify.yml` checks pools, not directories; unchanged.
+- Not in scope: production's `/opt/vmbackups` (`root:root`, `0755`,
+  `virt_image_t`) is not created.
+
+Checks: `ansible-lint --profile production --strict` 0 failures, 0 warnings;
+syntax check of 06, 07 and 08 inside the AAP EE (`ee-proj-aap-cac@sha256:e6451a10…`)
+pass without warnings.
+
 ## Credential type renamed to "AAP CaC repo read-write token" — 2026-11-19
 
 Decided with the user on 19 November 2026 (CET; exact time not recorded),

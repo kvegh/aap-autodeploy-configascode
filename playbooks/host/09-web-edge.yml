@@ -7,11 +7,11 @@
 # jail only. Every use case brings its own nginx vhost (conf.d), certificate,
 # basic-auth file and fail2ban jails for its nginx logs (jail.d). Use case
 # vhosts reference the shared /etc/letsencrypt/ssl-dhparams.pem and must not
-# include certbot's options-ssl-nginx.conf, which is not installed.
+# include certbot's options-ssl-nginx.conf, which is not installed. The AAP
+# login rate limit (limit_req_zone and the vhost's limit_req) protects AAP's
+# login, so it comes with WF2, not here.
 #
 # Required variables:
-#   nginx_rate_limit_zone     name of the login rate limit zone, e.g. aap_login
-#   nginx_rate_limit_rate     e.g. 6r/m
 #   host_ssh_port             vault: managed SSH port, for the sshd jail
 #   host_trusted_public_ips   vault: public IPs of our own hosts and AAP, never banned
 #
@@ -72,7 +72,6 @@
         mode: "0644"
       loop:
         - {src: nginx.conf.j2, dest: /etc/nginx/nginx.conf}
-        - {src: limits.conf.j2, dest: /etc/nginx/conf.d/limits.conf}
         - {src: 00-default.conf.j2, dest: /etc/nginx/conf.d/00-default.conf}
       notify: Check the nginx configuration
 

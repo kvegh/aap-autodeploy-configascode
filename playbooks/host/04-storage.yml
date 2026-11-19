@@ -2,8 +2,12 @@
 # VM image directories and their libvirt storage pools.
 #
 # The directories get the virt_image_t SELinux label directly; on a fresh host
-# they are empty, so no relabelling is needed. community.libvirt.virt_pool
-# takes one action per call, so define, start and autostart are three tasks.
+# they are empty, so no relabelling is needed. /opt/images, where the image
+# download stage puts the prebuilt images, is a plain directory, not a pool;
+# it is fixed here as in production (group libvirt, setgid). The libvirt group
+# comes with the libvirt packages of the virtualization stage.
+# community.libvirt.virt_pool takes one action per call, so define, start and
+# autostart are three tasks.
 # An existing pool is never redefined.
 #
 # Required variable:
@@ -14,13 +18,16 @@
   hosts: autodeploy_target
   become: true
   gather_facts: false
+  vars:
+    host_storage_plain_dirs:
+      - {path: /opt/images, owner: root, group: libvirt, mode: "2775"}
   tasks:
     - name: Record the SELinux label rule for the image directories
       community.general.sefcontext:
         target: "{{ item.path }}(/.*)?"
         setype: virt_image_t
         state: present
-      loop: "{{ host_storage_pools }}"
+      loop: "{{ host_storage_pools + host_storage_plain_dirs }}"
       loop_control:
         label: "{{ item.path }}"
 
@@ -32,7 +39,7 @@
         group: "{{ item.group }}"
         mode: "{{ item.mode }}"
         setype: virt_image_t
-      loop: "{{ host_storage_pools }}"
+      loop: "{{ host_storage_pools + host_storage_plain_dirs }}"
       loop_control:
         label: "{{ item.path }}"
 
