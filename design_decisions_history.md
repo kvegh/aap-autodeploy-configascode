@@ -1,5 +1,13 @@
 # Design decisions history
 
+## CaC apply uses a fixed async dir — 2026-11-19
+
+Implemented 19 November 2026, 10:22 CET. Public commit `b9b6312` (v0.0.39).
+Cause: JT 204 (job 5175) failed in `collect_async_status` with "could not
+find job": `aap_configuration_async_dir` defaults to empty and ansible-core
+2.20 in the EE did not find the async results. Fix: `aap-cac-apply.yml` sets
+`aap_configuration_async_dir: /tmp/.ansible_async`.
+
 ## AAP host trusts the AAP installer CA — 2026-11-19
 
 Decided by the user on 19 November 2026 (CET; exact time not recorded),
