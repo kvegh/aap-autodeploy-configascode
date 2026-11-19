@@ -11,32 +11,22 @@
 # login rate limit (limit_req_zone and the vhost's limit_req) protects AAP's
 # login, so it comes with WF2, not here.
 #
-# Required variables:
-#   host_ssh_port             vault: managed SSH port, for the sshd jail
-#   host_trusted_public_ips   vault: public IPs of our own hosts and AAP, never banned
+# Required variables, from the CaC inventory:
+#   host_web_edge_packages   nginx, certbot and fail2ban packages
+#   host_web_edge_services   units to start and enable (fail2ban)
+#   host_web_edge_timers     timers to start and enable (certificate renewal)
+#   host_fail2ban_jails      dict jail name -> settings, rendered into the jail
+#                            file; DEFAULT.ignoreip must hold our own public
+#                            addresses (host_trusted_public_ips) and AAP, so the
+#                            post-reboot root login check cannot get AAP banned
 #
-# The fail2ban jail is defined below; it holds nothing secret. The sshd jail
-# reads the journal (the RHEL default backend), so it needs no log file.
+# The sshd jail reads the journal (the RHEL default backend), so it needs no
+# log file.
 
 - name: Configure the web edge
   hosts: autodeploy_target
   become: true
   gather_facts: false
-  vars_files:
-    - ../vars/host-services.yml
-  vars:
-    host_fail2ban_jails:
-      DEFAULT:
-        # Our own hosts and AAP are never banned: a check that proves root
-        # login is refused attempts that login from AAP and must not lock it out.
-        ignoreip: "{{ (['127.0.0.1/8', '::1'] + host_trusted_public_ips) | join(' ') }}"
-        bantime: 1h
-        findtime: 10m
-        banaction: firewallcmd-rich-rules
-      sshd:
-        enabled: "true"
-        port: "{{ host_ssh_port }}"
-        maxretry: 4
   handlers:
     # nginx is not running here, so there is nothing to reload; a reload
     # would start it. The test only proves the configuration loads.
@@ -60,7 +50,7 @@
   tasks:
     - name: Install nginx, certbot and fail2ban
       ansible.builtin.dnf:
-        name: [nginx, certbot, fail2ban]
+        name: "{{ host_web_edge_packages }}"
         state: present
 
     - name: Render the nginx base configuration

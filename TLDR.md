@@ -4,6 +4,11 @@ Rebuild a physical host and an AAP instance from configuration as code. This
 repository is a refactor of the previous implementation, keeping what it proved
 and dropping the rest. See [README.md](README.md) for the full picture.
 
+Rule: configuration is separated from execution code. This repository holds
+execution code only; all configuration lives in the private companion
+repository's CaC (inventory variables of AutoDeploy-NGNG), with no defaults in
+the playbooks. There only real secrets are vault encrypted.
+
 ## What exists today
 
 Nine stages:
@@ -36,7 +41,7 @@ Nine stages:
   proves the setup survived the boot: SELinux, services, libvirt networks and
   pools, kernel values, port 22 closed and root login refused
   from outside. Expected values are shared with the setup stages.
-- `playbooks/08-images-download.yml`, nine tasks, requires 80 GiB free on
+- `playbooks/08-images-download.yml`, nine tasks, requires the configured free space on
   `/opt` when an image is missing, installs rclone, downloads each missing VM
   image from Google Drive and requires its pinned SHA-256. A corrupt file fails with its name and is
   deleted by hand before a rerun.

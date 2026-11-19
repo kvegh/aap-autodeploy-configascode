@@ -36,6 +36,13 @@ This repository keeps what the old one proved and drops the rest.
 - Safety requirements are kept: production is excluded by address, the exact
   target is confirmed before an erase, and a fresh installation is verified
   before anything trusts it.
+- Configuration is separated from execution code. This repository holds
+  execution code only; every configuration value (packages, services,
+  sysctl and KSM values, SELinux mode and booleans, sshd and fail2ban
+  settings, paths, ports, sizes and timeouts that are design choices) lives in
+  the private companion repository's CaC, as variables of the AAP inventory
+  AutoDeploy-NGNG. Playbooks carry no defaults for configuration values: a
+  missing value fails where it is used. Secrets come from AAP credentials.
 
 ### Status
 
@@ -99,8 +106,7 @@ directory `/opt/images`, `root:libvirt` 2775), libvirt networks, firewall
 (web ports), the web edge (nginx base, certbot, fail2ban) and tuning. The stage files keep
 their numbers; 06 (users) and 08 (SSH) moved into the host access bootstrap.
 fail2ban never bans our own public addresses. File templates live in the
-public repository; their values come from the private repository's CaC and
-vault. nginx is installed and configured but neither enabled nor started;
+public repository; their values come from the private repository's CaC. nginx is installed and configured but neither enabled nor started;
 the AAP deployment (WF2) starts it and brings the AAP login rate limit
 (`limit_req_zone` in `conf.d`, used by the AAP vhost). fail2ban runs with the
 sshd jail only.
@@ -117,8 +123,8 @@ nginx runs only after WF2. It runs as `ansible` on the inventory port with no
 fallback to port 22 or root. The old workflow ran a separate verify before
 the reboot as well; it is dropped, since the host access bootstrap proves
 login and sudo itself and only the run after the reboot shows something new.
-Every value that a setup stage sets and this stage checks is defined once in
-`playbooks/vars/` and read by both.
+Every value that a setup stage sets and this stage checks is defined once, as
+a CaC inventory variable, and read by both.
 
 The instance retire job (`instance-retire.yml`) is not part of any deployment
 workflow. Several instances may be live at once, so a person names the
@@ -138,7 +144,7 @@ registration is a planned follow-up that needs a Red Hat API token.
 
 The image download stage (`08-images-download.yml`) runs as `ansible` on the
 inventory port. If at least one image of the CaC list is missing, it first
-requires 80 GiB free on the filesystem that holds `/opt`
+requires the configured free space (`images_min_free_gib`) on the filesystem that holds `/opt`
 (`images_min_free_gib`); with every image present the check is skipped, so a
 rerun after a complete download does not fail on the space the images use.
 It then installs rclone, writes the Google Drive rclone configuration from
@@ -195,10 +201,8 @@ assertions are read-only and safe to run at any time.
 
     playbooks/                one playbook per stage
     playbooks/host/           host setup stages, imported by 06-host-setup.yml
-    playbooks/vars/           values shared by more than one stage: SSH hardening,
-                              and the services, tuning and SELinux values that the
-                              setup stages set and the post-reboot check expects
-    playbooks/host/templates/ file templates (values come from the private repo)
+    playbooks/host/templates/ file templates, structure only (values come from the
+                              private repo's CaC)
     playbooks/host/files/     static files (public, no secrets)
     collections/  collection requirements
 
@@ -374,5 +378,6 @@ Review requirements come from
 No review report exists yet; a stage cannot be accepted before it has run
 end to end through AAP.
 
-Populated configuration and secrets belong in the private companion repository
-as Ansible Vault encrypted files, never here.
+All configuration belongs in the private companion repository's CaC, never
+here. There only real secrets (passwords, private keys, tokens) are Ansible
+Vault encrypted; other values are plain text in that private repository.

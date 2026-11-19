@@ -46,20 +46,24 @@
 # The machine credential's SSH key must be one of the keys the reinstall stage
 # installed for root (robot_ssh_keys) and one of the keys listed for ansible.
 #
-# Required variables:
-#   host_authorized_keys   vault: dict user name -> list of public keys, for
+# Required variables, all from the CaC inventory:
+#   host_authorized_keys   dict user name -> list of public keys, for
 #                          ansible and every account in host_users
-#   host_users             vault: personal accounts, list of {name, groups};
+#   host_users             personal accounts, list of {name, groups};
 #                          admins include wheel
-#   host_ssh_allow_users   vault: accounts allowed to log in: ansible and the
+#   host_ssh_allow_users   accounts allowed to log in: ansible and the
 #                          accounts in host_users
-#   host_ssh_port          vault: managed SSH port
-#   dns_host_ipv4          vault: public IPv4 of the host, as for the host DNS stage
-#   net_internal           vault: the internal network; its address is the bridge's
+#   host_ssh_port          managed SSH port
+#   dns_host_ipv4          public IPv4 of the host, as for the host DNS stage
+#   net_internal           the internal network; its address is the bridge's
+#   host_ssh_internal_port port sshd listens on at the bridge address
+#   host_sshd_config_file  sshd drop-in file the sshd role writes as a whole
+#   host_sshd_hardening    sshd settings, for example PermitRootLogin; Port,
+#                          ListenAddress and AllowUsers are added here
 #   aap_inventory_name     AAP inventory that holds this host under its inventory name
-#   host_bootstrap_user    optional, login of the fresh installation, default
-#                          root. Set it to ansible to rerun this stage once root
-#                          login is off; a rerun connects on the recorded port.
+#   host_bootstrap_user    login of the fresh installation, root. Set it to
+#                          ansible to rerun this stage once root login is off;
+#                          a rerun connects on the recorded port.
 #
 # Credentials: the machine credential, and the standard Red Hat Ansible
 # Automation Platform credential, which hands the controller URL and login to
@@ -72,11 +76,11 @@
   # fresh installation. Play variables override the credential's user, so this
   # play alone starts as root; the tasks below switch it to ansible.
   vars:
-    ansible_user: "{{ host_bootstrap_user | default('root') }}"
-    host_sshd_bootstrap_settings: "{{ host_sshd_hardening | combine({'Port': host_ssh_port | int}) }}"
-    host_sshd_final_listen: ["{{ dns_host_ipv4 }}:{{ host_ssh_port }}", "{{ net_internal.address }}:22"]
-  vars_files:
-    - vars/sshd-hardening.yml
+    ansible_user: "{{ host_bootstrap_user }}"
+    host_sshd_bootstrap_settings: >-
+      {{ host_sshd_hardening | combine({'Port': host_ssh_port | int,
+      'AllowUsers': host_ssh_allow_users | join(' ')}) }}
+    host_sshd_final_listen: ["{{ dns_host_ipv4 }}:{{ host_ssh_port }}", "{{ net_internal.address }}:{{ host_ssh_internal_port }}"]
   tasks:
     - name: Create the ansible user
       ansible.builtin.user:

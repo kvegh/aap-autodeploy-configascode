@@ -9,10 +9,10 @@
 # host that does not matter. Changing a network later means removing and
 # defining it again with the VMs stopped.
 #
-# Required variables:
+# Required variables, from the CaC inventory:
 #   host_libvirt_networks   list of {name, autostart, active, template}, where
 #                           template is true when templates/net-<name>.xml.j2 exists
-#   net_internal            vault: bridge, mac, domain, address, netmask,
+#   net_internal            bridge, mac, domain, address, netmask,
 #                           dhcp_start, dhcp_end, reservations, dns_hosts, uuid (optional)
 
 - name: Configure the libvirt networks

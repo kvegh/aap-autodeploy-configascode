@@ -6,39 +6,22 @@
 # the web edge stage, rclone in the image download). CodeReady Builder is not
 # enabled: no package we install, nor any of their dependencies, comes from it.
 #
-# Required variables:
+# Required variables, from the CaC inventory unless noted:
 #   autodeploy_deployment_version   from the deployment version stage, e.g. v26
 #   dns_host_label, dns_zone, dns_host_ipv4   as for the host DNS stage
 #   host_timezone                   e.g. Europe/Vienna
+#   host_base_packages              packages to install
+#   host_base_services              units to start and enable
 
 - name: Configure the hypervisor base
   hosts: autodeploy_target
   become: true
   gather_facts: false
-  vars_files:
-    - ../vars/host-services.yml
   vars:
     host_short_name: "{{ dns_host_label }}-{{ autodeploy_deployment_version }}"
     host_fqdn: "{{ dns_host_label }}.{{ autodeploy_deployment_version }}.{{ dns_zone }}"
     epel_gpg_key_url: https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-9
     epel_release_url: https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
-    host_base_packages:
-      # SELinux tooling other modules need (labels, ports)
-      - policycoreutils-python-utils
-      - python3-libselinux
-      # Administration tools for the people working on the host
-      - vim-enhanced
-      - nano
-      - tmux
-      - wget
-      - bind-utils
-      - pciutils
-      - mlocate
-      - git
-      - sysstat
-      # Local hardware health monitors
-      - smartmontools
-      - rasdaemon
   handlers:
     - name: Restart rasdaemon with the serialized start
       ansible.builtin.systemd_service:

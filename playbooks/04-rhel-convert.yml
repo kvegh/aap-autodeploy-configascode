@@ -8,7 +8,7 @@
 # Required inventory: the rebuilt host in group autodeploy_target, reachable
 # over SSH as ansible, the account the host access bootstrap created.
 #
-# Required variables, supplied by the encrypted vault:
+# Required variables, injected by the Red Hat Subscription-NGNG credential:
 #   rhsm_org_id           Red Hat subscription organization ID
 #   rhsm_activation_key   activation key that registers the host
 #

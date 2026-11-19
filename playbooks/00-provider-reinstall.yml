@@ -5,7 +5,7 @@
 # This playbook erases the target. It makes no provider write before both the
 # target confirmations and the production exclusion have passed.
 #
-# Required variables, supplied by an encrypted inventory or credential injection:
+# Required variables, from the CaC inventory and the provider credential:
 #   robot_username, robot_password   provider API account
 #   robot_server_number              provider server number of the target
 #   robot_expected_server_ip         primary IPv4 of the target

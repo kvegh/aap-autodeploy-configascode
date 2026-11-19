@@ -5,13 +5,14 @@
 # This playbook only creates or corrects the new name. It never deletes a
 # name: older versions may still belong to live instances.
 #
-# Required variables, supplied by the job template, the workflow and the DNS
-# credential:
+# Required variables, from the workflow, the DNS credential and the CaC
+# inventory:
 #   autodeploy_deployment_version   published by the deployment version stage
 #   dns_godaddy_token               GoDaddy API token for the zone
 #   dns_zone                        DNS zone, for example example.com
 #   dns_host_label                  first label of the host name, for example hactar
 #   dns_host_ipv4                   public IPv4 of the rebuilt host
+#   dns_ttl                         TTL of the A record in seconds
 #
 # The record is written through the GoDaddy v3 API with ansible.builtin.uri:
 # no maintained collection has a GoDaddy DNS module.
@@ -23,7 +24,6 @@
   become: false
   vars:
     dns_api_base: https://api.godaddy.com
-    dns_ttl: 600
   tasks:
     - name: Build the host name from the deployment version
       ansible.builtin.set_fact:

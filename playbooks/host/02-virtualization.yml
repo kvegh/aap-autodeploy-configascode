@@ -1,25 +1,18 @@
 ---
 # KVM and libvirt with RHEL 9's default modular daemons.
 #
-# A fresh RHEL 9 uses the modular libvirt daemons (virtqemud, virtnetworkd,
-# virtstoraged), so the units are fixed here instead of detected.
+# A fresh RHEL 9 uses the modular libvirt daemons, so the units are listed in
+# the CaC instead of detected. Their API sockets are derived from the names.
 # NTFS support (ntfs-3g, libguestfs-winsupport) belongs to the Windows use case.
+#
+# Required variables, from the CaC inventory:
+#   host_virtualization_packages   KVM, libvirt and image tool packages
+#   host_libvirt_daemons           modular libvirt daemons, e.g. virtqemud
 
 - name: Configure virtualization
   hosts: autodeploy_target
   become: true
   gather_facts: false
-  vars_files:
-    - ../vars/host-services.yml
-  vars:
-    host_virtualization_packages:
-      - qemu-kvm
-      - libvirt
-      - libvirt-client
-      - python3-libvirt
-      - python3-lxml
-      - virt-install
-      - guestfs-tools
   tasks:
     - name: Install KVM, libvirt and the image tools
       ansible.builtin.dnf:

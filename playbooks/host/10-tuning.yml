@@ -9,13 +9,15 @@
 # whose virtualization profiles set the write limits as percentages, which
 # would silently replace the byte values above. tmpfiles.d writes the three
 # KSM values at every boot without TuneD.
+#
+# Required variables, from the CaC inventory, shared with the post-reboot check:
+#   host_tuning_sysctls   list of {name, value}, written to sysctl.d
+#   host_ksm_settings     list of {path, value} under /sys/kernel/mm/ksm
 
 - name: Tune the hypervisor
   hosts: autodeploy_target
   become: true
   gather_facts: false
-  vars_files:
-    - ../vars/host-tuning.yml
   handlers:
     - name: Apply the KSM settings now
       ansible.builtin.command:

@@ -1,5 +1,62 @@
 # Design decisions history
 
+## Configuration separated from execution code; only secrets encrypted — 2026-11-19
+
+Decided by the user on 19 November 2026 (CET; exact time not recorded),
+implemented 19 November 2026, 06:20 CET (v0.0.36). Implementation commit
+recorded in a follow-up commit. Supersedes the 2026-11-19 choice of a fixed
+play variable for `/opt/images` in `04-storage.yml` and the shared
+`playbooks/vars/` files.
+
+- Rule: all configuration lives in the private CaC; this repository holds
+  execution code only. Playbooks read CaC inventory variables (inventory
+  AutoDeploy-NGNG) directly and carry no defaults for configuration values;
+  a missing value fails where Jinja uses it. No extra asserts were added.
+- `playbooks/vars/` is removed (4 files) with every `vars_files`
+  reference; its 10 values are inventory variables now
+  (`host_selinux_default_state` became `host_selinux_state`, no default).
+  The post-reboot check still reads the same variables as the setup stages;
+  it derives the list of boot services from them plus `firewalld` (started
+  by the firewall role).
+- Moved from code into the CaC as well: `host_bootstrap_user` (root),
+  `images_min_free_gib` (80), `images_download_timeout` (21600), `dns_ttl`
+  (600), the base, virtualization and web edge package lists, SELinux policy
+  and booleans, `host_storage_plain_dirs` (`/opt/images`), the firewall's
+  public services, the fail2ban jails (whole dict, including ignoreip and
+  the sshd port as job-time templates) and the bridge SSH port
+  (`host_ssh_internal_port`, 22): 13 more variables. `AllowUsers` is no
+  longer a stored template: the bootstrap adds it from
+  `host_ssh_allow_users`, as it adds Port and ListenAddress.
+- Kept in code as mechanics: module parameters, retries, reboot and wait
+  timeouts, API endpoints, file locations of drop-ins, port 22 of a fresh
+  installation and of the firewalld ssh service, the rasdaemon workaround,
+  SELinux type `virt_image_t`, modes of root-only secret files, defaults for
+  optional data keys or API answers.
+- Left open for the user (not decided here): the automation account name
+  `ansible` and the passwordless sudo policy for it and wheel; the software
+  source URLs (EPEL, convert2rhel repository and GPG keys); the nginx base
+  configuration and catch-all vhost (ports 80/443) and the internal network
+  template's fixed values (NAT, port range, STP); the host naming scheme
+  `<label>-<version>` / `<label>.<version>.<zone>`; the rclone retry counts
+  and the `/opt` mount candidates of the free-space check; the counter file
+  path in the private repository; `cac_usecase` and `cac_repository_ref`
+  defaults of `aap-cac-apply.yml`, which are bootstrap inputs of the job that
+  applies the CaC itself.
+- The private repository now encrypts only real secrets; its non-secret
+  values became plain text there (same decision, recorded there).
+- Rollout: the AAP inventory gets the new variables only when the CaC is
+  applied; until then WF1 jobs of this version fail on undefined variables,
+  because the project updates on launch.
+
+Checks: `ansible-lint --profile production --strict` 0 failures, 0
+warnings; syntax check of all playbooks in `ee-proj-aap-cac@sha256:e6451a10…`
+(ansible-core 2.20.10); `filetree_read` of the private tree in the same EE:
+every variable the playbooks reference is defined by inventory variables,
+credential injectors, surveys, job template extra variables or the
+workflow artifact, and the inventory's job-time templates render. A
+script-inventory test in the EE showed templates in inventory variables
+render at job time. APME not run (not installed). Not executed in AAP.
+
 ## CaC apply job template — 2026-11-19
 
 Requested by the user on 19 November 2026 (CET; exact time not recorded),

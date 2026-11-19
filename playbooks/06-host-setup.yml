@@ -6,7 +6,8 @@
 #
 # Inventory: the host in group autodeploy_target, reached as ansible on the
 # port recorded in the AAP inventory. Variables are listed in each stage's
-# header; secrets and environment details come from the vault.
+# header; all configuration comes from the CaC inventory, secrets from
+# credentials.
 
 - name: Base settings
   ansible.builtin.import_playbook: host/01-base.yml

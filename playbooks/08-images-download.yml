@@ -14,14 +14,14 @@
 # Runs as ansible on the port the host access bootstrap recorded in the AAP
 # inventory.
 #
-# Required variables:
-#   images_download            CaC list of {remote, dest, sha256}, e.g.
+# Required variables, from the CaC inventory unless noted:
+#   images_download            list of {remote, dest, sha256}, e.g.
 #                              {remote: 'drive:images/rhel9.qcow2', dest: /opt/vms/rhel9.qcow2, sha256: <64 hex>}
 #   images_rclone_conf         rclone configuration with the Drive remote,
 #                              supplied by the "Google Drive rclone-NGNG" credential
-#   images_download_timeout    optional, seconds per image, default 21600;
-#                              must stay below the job template timeout
-#   images_min_free_gib        optional, free GiB required on /opt, default 80
+#   images_download_timeout    seconds per image; must stay below the job
+#                              template timeout
+#   images_min_free_gib        free GiB required on /opt when an image is missing
 
 - name: Download the VM images
   hosts: autodeploy_target
@@ -60,11 +60,11 @@
     - name: Require enough free space on /opt
       ansible.builtin.assert:
         that:
-          - images_opt_mount['size_available'] >= (images_min_free_gib | default(80) | int) * 1073741824
+          - images_opt_mount['size_available'] >= (images_min_free_gib | int) * 1073741824
         fail_msg: >-
           /opt (filesystem mounted at {{ images_opt_mount['mount'] }}) has
           {{ (images_opt_mount['size_available'] / 1073741824) | round(1) }} GiB free;
-          {{ images_min_free_gib | default(80) }} GiB are required before downloading.
+          {{ images_min_free_gib }} GiB are required before downloading.
       when: images_missing
 
     # EPEL is enabled by the base stage.
@@ -110,7 +110,7 @@
           - --low-level-retries
           - "20"
         creates: "{{ item.dest }}"
-      async: "{{ images_download_timeout | default(21600) }}"
+      async: "{{ images_download_timeout }}"
       poll: 30
       loop: "{{ images_download }}"
       loop_control:

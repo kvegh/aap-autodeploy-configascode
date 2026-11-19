@@ -7,6 +7,9 @@
 #
 # The role adds the listed rules; it does not remove rules dropped from this
 # list. Handling removals in CaC is a separate project to-do.
+#
+# Required variable, from the CaC inventory:
+#   host_firewall_public_services   firewalld services opened on the public zone
 
 - name: Configure the firewall
   hosts: autodeploy_target
@@ -18,7 +21,7 @@
       vars:
         firewall:
           - zone: public
-            service: [http, https]
+            service: "{{ host_firewall_public_services }}"
             state: enabled
             permanent: true
             runtime: true

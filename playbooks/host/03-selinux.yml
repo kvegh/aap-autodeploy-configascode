@@ -1,26 +1,25 @@
 ---
 # SELinux mode and booleans.
 #
-# Permissive on purpose: this is a demo environment (decided 2026-11-17). The
-# booleans and directory labels are still set, so switching to enforcing later
-# only means changing host_selinux_state. The default mode is shared with the
-# post-reboot check. The SSH port label is set by the host access bootstrap,
-# where the port is configured.
+# The CaC sets permissive on purpose: this is a demo environment (decided
+# 2026-11-17). The booleans and directory labels are still set, so switching
+# to enforcing later only means changing host_selinux_state. The mode is
+# shared with the post-reboot check. The SSH port label is set by the host
+# access bootstrap, where the port is configured.
+#
+# Required variables, from the CaC inventory:
+#   host_selinux_state      enforcing, permissive or disabled
+#   host_selinux_policy     e.g. targeted
+#   host_selinux_booleans   list of {name, state, persistent}
 
 - name: Configure SELinux
   hosts: autodeploy_target
   become: true
-  vars_files:
-    - ../vars/host-selinux.yml
   tasks:
     - name: Set the SELinux mode and booleans
       ansible.builtin.include_role:
         name: redhat.rhel_system_roles.selinux
       vars:
-        selinux_policy: targeted
-        selinux_state: "{{ host_selinux_state | default(host_selinux_default_state) }}"
-        selinux_booleans:
-          # nginx forwards requests to the VMs behind it
-          - {name: httpd_can_network_connect, state: true, persistent: true}
-          # VMs may use USB devices passed through from the host
-          - {name: virt_use_usb, state: true, persistent: true}
+        selinux_policy: "{{ host_selinux_policy }}"
+        selinux_state: "{{ host_selinux_state }}"
+        selinux_booleans: "{{ host_selinux_booleans }}"
