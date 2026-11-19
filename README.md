@@ -213,7 +213,7 @@ encrypted `env_variables.yml`, reads the tree with `filetree_read`
 (`controller_configuration_filetree_read_layout: create`) and applies it with
 `dispatch`. Export and apply therefore use the same layout and variable names.
 
-What the job template needs:
+What the job template needs (in AAP: "AutoDeploy-NGNG CaC apply"):
 
 - **Private repository.** An AAP job sees only its own project, so a second
   AAP project for the private repository is no use. The playbook downloads
@@ -254,7 +254,7 @@ Command line example:
 | `reset_type: hardware` valid in community.hrobot 2.8.0 | yes (`software`, `hardware`, `power`, `manual`) |
 | APME (commit `9c4372f`, core 2.20; native, opa and ansible validators) | no defects; one lead open, deviations accepted below |
 | Executed against a real server | not done |
-| AAP job templates, workflow and end-to-end test | WF1 00–08 job templates and the workflow "AutoDeploy-NGNG WF1" exist in AAP and the CaC; deployment version run successful; workflow and other templates not run, no end-to-end test yet |
+| AAP job templates, workflow and end-to-end test | WF1 00–08 job templates, the workflow "AutoDeploy-NGNG WF1" and the job template "AutoDeploy-NGNG CaC apply" exist in AAP and the CaC; deployment version run successful; workflow and other templates not run, no end-to-end test yet |
 
 Accepted APME deviations:
 

@@ -1,5 +1,24 @@
 # Design decisions history
 
+## CaC apply job template — 2026-11-19
+
+Requested by the user on 19 November 2026 (CET; exact time not recorded),
+implemented 19 November 2026, 06:05 CET (v0.0.35). No playbook change; the
+job template is defined in the private repository's CaC, commit `22b887e`
+(v0.0.34).
+
+- JT 204 — AutoDeploy-NGNG CaC apply runs `playbooks/aap-cac-apply.yml`
+  from project AAP AutoDeploy-NGNG in EE ee-proj-aap-cac, inventory
+  AutoDeploy-NGNG (holds `localhost` with a local connection), timeout
+  3600 s, no simultaneous runs. Not a WF1 step.
+- Only `cac_repository` (owner/name) is set as an extra variable;
+  `cac_usecase` and `cac_repository_ref` keep the playbook defaults.
+- Credentials: GitHub AutoDeploy CaC Secrets-NGNG, AAP API-NGNG and the
+  deploying AAP's existing vault credential "aap_autodeploy_configascode-secrets
+  CaC vault cred" (vault ID `cac`), whose password decrypts the private
+  `env_variables.yml`. The vault credential is not part of the CaC: its value
+  would have to be stored in the vault it unlocks.
+
 ## WF1 workflow template — 2026-11-19
 
 Requested by the user on 18 November 2026 (CET; exact time not recorded),
