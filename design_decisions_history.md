@@ -1,5 +1,36 @@
 # Design decisions history
 
+## AAP host trusts the AAP installer CA — 2026-11-19
+
+Decided by the user on 19 November 2026 (CET; exact time not recorded),
+implemented 19 November 2026, 09:57 CET. Public commit `0522679` (v0.0.38); private CaC commit
+`596dbaa` (v0.0.37). Cause: JT 204 — AutoDeploy-NGNG CaC apply (job 5146)
+failed with CERTIFICATE_VERIFY_FAILED on https://aap.supercorp.at, whose
+certificate the AAP installer's own CA signed; neither the AAP host's RHEL
+nor the EE trusted that CA.
+
+- The RHEL host under AAP trusts AAP's CA: `playbooks/aap-host-ca-trust.yml`
+  copies the installer CA, already on the host, into the trust anchors
+  (`remote_src`, so it stays out of Git) and runs `update-ca-trust` in a
+  handler (no module exists for it).
+- Jobs see it without change: AAP's "Paths to expose to isolated jobs"
+  already holds `/etc/pki/ca-trust:/etc/pki/ca-trust:O` (installer value),
+  so the planned extra read-only mount of `extracted` was not added.
+- Fewest objects: host 51 — aap-platform in the existing inventory
+  AutoDeploy-NGNG, in no group; WF1 plays target only `autodeploy_target`
+  and `localhost`, so no WF1 job can reach it. Variables
+  `ca_trust_source_path`, `ca_trust_anchor_name` are its host variables.
+- Not done: the job template and SSH credential. No AAP credential is known
+  to hold a key authorized for `aap_service` on the AAP VM; it must be added
+  by the user first.
+- Future AAPs (WF2): one shared AutoDeploy CA, certificate plain and key
+  vault-encrypted in the private repository, given to the installer as
+  `ca_tls_cert`/`ca_tls_key`; the VM setup trusts it before the installer
+  runs. Decided, not implemented; no CA generated.
+- Rejected: EE rebuild with the CA; routing AAP calls via the public address
+  (Let's Encrypt certificate); copying the Let's Encrypt certificate every 90
+  days; merging a CA bundle at run time from a credential.
+
 ## Remaining self-defined configuration moved to the CaC; two simplifications — 2026-11-19
 
 Decided by the user on 19 November 2026 (CET; exact time not recorded),
