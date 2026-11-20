@@ -11,7 +11,7 @@
 #   2. the Let's Encrypt certificate of the AAP name on the hypervisor
 #   3. the AAP VM's host in the AAP inventory
 #   4. every A record in the zone with the version as a whole label, for
-#      example hactar.v24 and aap.v24, but never hactar.v240
+#      example host.v24 and aap.v24, but never host.v240
 #   5. the version in the live list of the deployment counter
 # The live list is written last, so a failure leaves the version live and a
 # rerun finds everything again.

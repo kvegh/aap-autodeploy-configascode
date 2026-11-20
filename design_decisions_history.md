@@ -677,7 +677,7 @@ account are in `wheel`, which has passwordless sudo. The personal account
 name is an environment detail and lives in the vault.
 
 The authorized public keys of `aap_hypervisor` and the personal account were
-taken from their current `authorized_keys` on production hactar, option
+taken from their current `authorized_keys` on the production hypervisor, option
 prefixes included, and stored in the vault.
 
 The fail2ban trusted addresses (`host_trusted_public_ips`) reference
@@ -787,7 +787,7 @@ old host DNS retire.
 - The automatic wiped-server mode is dropped. After a reinstall the previous
   version stays live and in DNS until it is retired by hand; this is intended.
 - Version 1 cleans two things: every A record in the zone with the version as
-  a whole label (`hactar.v24`, later also `aap.v24`, never `hactar.v240`), then
+  a whole label (`host.v24`, later also `aap.v24`, never `host.v240`), then
   the version in the live list of `state/deployment_counter.yml`, written with
   the same SHA-guarded contents API call as the counter job, comments and the
   next number unchanged. DNS goes first, so a failed delete leaves the version

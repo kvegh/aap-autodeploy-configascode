@@ -1,6 +1,6 @@
 ---
 # Publish the public DNS name of the rebuilt host, for example
-# hactar.v26.<zone>, and wait until public DNS resolves it.
+# host.v26.<zone>, and wait until public DNS resolves it.
 #
 # This playbook only creates or corrects the new name. It never deletes a
 # name: older versions may still belong to live instances.
@@ -12,7 +12,7 @@
 #   dns_godaddy_token               GoDaddy API token for the zone
 #   dns_zone                        DNS zone, for example example.com
 #   host_dns_record                 host name relative to the zone, a job-time
-#                                   template in the CaC, for example hactar.v26
+#                                   template in the CaC, for example host.v26
 #   host_fqdn                       full host name, a job-time template in the CaC
 #   dns_host_ipv4                   public IPv4 of the rebuilt host
 #   dns_ttl                         TTL of the A record in seconds

@@ -138,7 +138,7 @@ versions to retire in its survey, for example `v24, v25`. Only versions in the
 live list are accepted, never the counter's next number. Everything an
 instance owns is found by the version in its name, without a separate
 registry. It deletes every A record in the zone that has the version as a
-whole label (`hactar.v24`, `aap.v24`, never `hactar.v240`), then removes the
+whole label (`host.v24`, `aap.v24`, never `host.v240`), then removes the
 versions from the live list with the same SHA-guarded write as the deployment
 version stage. Before DNS it stops, undefines and deletes each version's AAP
 VM and disk on the hypervisor (names from the CaC templates) and deletes the
@@ -411,8 +411,8 @@ spacing, a false positive on the `|` alternation inside the regular
 expression string, gone when that string is removed; `L039`, `L049`, `L078` as
 above; `M005` as the open lead below. Tested inside the EE against local
 stand-ins for the GitHub contents API and GoDaddy: retiring `v24` deletes
-`hactar.v24`, `aap.v24`, `v24` and `HACTAR.V24` but not `hactar.v240`,
-`v240.hactar` or `hactar.v24x`, and writes the live list without it, comments
+`host.v24`, `aap.v24`, `v24` and `HOST.V24` but not `host.v240`,
+`v240.host` or `host.v24x`, and writes the live list without it, comments
 and the counter line unchanged, against the read SHA; `24 ,V25` is normalised
 to `v24, v25`; a live version without a record deletes nothing and still
 updates the list; a version not live, the next number, a malformed or an empty
