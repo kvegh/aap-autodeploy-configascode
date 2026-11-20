@@ -1,5 +1,41 @@
 # Design decisions history
 
+## AAP DNS record and certificate stage, retire of the certificate — 2026-11-20
+
+Decided by the user on 19 November 2026 (CET; bead bead-wd-0gnz.41),
+implemented 20 November 2026. Public implementation commit `8da24c5`
+(v0.0.44); private CaC commit `c8545e0` (v0.0.45). Job templates created
+through the API: 207 — AutoDeploy-NGNG 02 AAP DNS publish (Credential 64) and
+208 — AutoDeploy-NGNG 10 AAP certificate request (Credential 62); inventory
+AutoDeploy-NGNG, project 193, EE ee-proj-aap-cac. Project 193 synced once
+(update 5266). No inventory variable added, no CaC apply, no job launched, no
+workflow changed.
+
+User decisions:
+- AAP DNS record: `02-host-dns-publish.yml` reused unchanged through its own
+  job template; its extra variables set `host_dns_record` and `host_fqdn` to
+  the AAP name. The record points to the hypervisor's public address.
+- Certificate: enable and start nginx, then `certbot certonly --webroot` for
+  the AAP name into the webroot the web edge stage created. Account address
+  from the CaC. No temporary nginx configuration, no placeholder vhost: the
+  AAP vhost is written once, after the AAP install.
+- Retire: the certificate of a retired version is removed by the instance
+  retire job.
+
+Implementer choices: playbook name `10-aap-certificate-request.yml`; job
+template names with the playbook numbers 02 and 10; JT 208 timeout 900 s;
+the CaC variable name `host_certbot_email` (hypervisor certbot account); the
+webroot path fixed in code as in the web edge stage; retire uses `certbot
+delete` guarded by `removes:` on the live directory, in the hypervisor play
+before the inventory, DNS and live list changes. Checks: ansible-lint
+production strict 0/0 on 02, 10 and instance-retire; syntax check.
+
+Open before the first run: `host_certbot_email` is not in the CaC (no value
+known). The web edge stage's catch-all port-80 server answers every unknown
+name with 444 and nothing serves `/.well-known/acme-challenge/`, so the
+HTTP-01 challenge for the AAP name fails until a port-80 server for that name
+or the challenge path exists; the user's decision is pending.
+
 ## AAP VM inventory host and login proof, retire of the host — 2026-11-19
 
 Decided by the user on 19 November 2026 (CET; bead bead-wd-0gnz.41),
