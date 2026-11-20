@@ -1,5 +1,12 @@
 # Design decisions history
 
+## Environment names removed from the public repo — 2026-11-20
+
+20 November 2026 (CET), approved by the user: the public repo must not name hosts.
+20 hostnames in this history and one in the README were replaced with generic terms
+("the test hypervisor", "the deploying AAP's URL", `<label>.vXY.<zone>`). Older Git
+revisions still contain them. v0.0.46.
+
 ## Shared AutoDeploy CA confirmed, given to the AAP installer — 2026-11-20
 
 20 November 2026 (CET), decided by the user (confirms the decision of 19 November).
@@ -7,7 +14,7 @@ Every AAP deployed by AutoDeploy gets its service certificates from one shared
 AutoDeploy CA: the installer receives it through `ca_tls_cert`/`ca_tls_key` (AAP 2.7
 install guide, custom TLS certificates: "the installation program automatically
 creates TLS certificates for each Ansible Automation Platform service using your
-provided CA certificate"). hactar-ng trusts that CA so its nginx verifies the AAP VM's
+provided CA certificate"). The test hypervisor trusts that CA so its nginx verifies the AAP VM's
 certificate (`proxy_ssl_verify on`), and hubs in a deployment chain trust each other
 without exchanging CAs.
 
@@ -60,8 +67,8 @@ or the challenge path exists; the user's decision is pending.
 Decided by the user on 19 November 2026 (CET; bead bead-wd-0gnz.41),
 implemented 19 November 2026. Public implementation commit `a7e7a0a`
 (v0.0.43); private CaC commit `eb33799` (v0.0.43). AAP changes through the
-API: Credential 66 AAP API-NGNG attached to JT 206, Credential 62 hactar-ng
-ansible-NGNG attached to JT 205; Inventory 10 variables merged with the 13
+API: Credential 66 AAP API-NGNG attached to JT 206, Credential 62 (hypervisor machine
+credential) attached to JT 205; Inventory 10 variables merged with the 13
 missing CaC keys (`aap_version_short`, `aap_vm_*`, `aap_vm_connection`),
 existing keys unchanged, live equal to the CaC; Project 193 synced once
 (update 5265). No CaC apply, no job launched.
@@ -71,7 +78,7 @@ User decisions:
   AutoDeploy-NGNG at run time (`ansible.controller.host`), with
   `ansible_host` from the reservation `aap`, `ansible_fqdn`
   `aap27.vXY.<dns_zone>` and `ansible_ssh_common_args` with a ProxyCommand
-  through hactar-ng's managed port as the automation account. The values are
+  through the test hypervisor's managed port as the automation account. The values are
   defined once, in the CaC dict `aap_vm_connection`; the same run reaches the
   VM with `add_host` from that dict.
 - After the VM starts: `wait_for_connection` through the jump, then `ping`
@@ -116,7 +123,7 @@ User decisions:
 - Deployment version: optional launch variable `deployment_version`
   (neutral name, chosen by the implementing agent); set, it must be live and
   is published without drawing; empty, step 01 draws as before.
-- Access: static CaC inventory host with ProxyCommand through hactar-ng and
+- Access: static CaC inventory host with ProxyCommand through the test hypervisor and
   the same credential for both hops. Not built: a static host name cannot
   carry the version (open question to the user).
 - No firewall rule VM to hypervisor.
@@ -129,7 +136,7 @@ User decisions:
 Implementer choices: playbook name `09-aap-vm-create.yml`; reruns skip resize
 and virt-customize once `/etc/libvirt/qemu/<name>.xml` exists; disk keeps the
 image's mode (`mode: preserve`); osinfo `rhel9.0` (not checked against
-hactar-ng's osinfo-db); JT timeout 3600 s. Checks: ansible-lint production
+the test hypervisor's osinfo-db); JT timeout 3600 s. Checks: ansible-lint production
 strict 0/0; render tests of the version expression, the virt-customize
 arguments and the CaC templates under loop variables.
 
@@ -162,7 +169,7 @@ find job": `aap_configuration_async_dir` defaults to empty and ansible-core
 Decided by the user on 19 November 2026 (CET; exact time not recorded),
 implemented 19 November 2026, 09:57 CET. Public commit `0522679` (v0.0.38); private CaC commit
 `596dbaa` (v0.0.37). Cause: JT 204 — AutoDeploy-NGNG CaC apply (job 5146)
-failed with CERTIFICATE_VERIFY_FAILED on https://aap.supercorp.at, whose
+failed with CERTIFICATE_VERIFY_FAILED on the deploying AAP's URL, whose
 certificate the AAP installer's own CA signed; neither the AAP host's RHEL
 nor the EE trusted that CA.
 
@@ -226,7 +233,7 @@ implemented 19 November 2026, 06:51 CET (v0.0.37). Implementation commit
 Checks: `ansible-lint --profile production --strict` 0 failures, 0 warnings;
 syntax check of all playbooks in `ee-proj-aap-cac@sha256:e6451a10…`;
 `filetree_read` of the private tree: every variable the playbooks reference is
-defined, the job-time templates render (`hactar-v26`, `hactar.v26.supercorp.at`),
+defined, the job-time templates render (`<label>-v26`, `<label>.v26.<zone>`),
 a list element template in inventory variables renders at job time (EE test);
 `net-internal.xml.j2` and `00-default.conf.j2` render with the CaC values;
 job template 204 from `filetree_read` matches AAP. Not executed in AAP.
@@ -461,7 +468,7 @@ companion repository.
   `3f39469` (v0.0.30). The variables `counter_git_username` and
   `counter_git_token` keep their names.
 
-## Managed SSH port set in the host access bootstrap, public NIC detected, hactar-ng as test host — 2026-11-18
+## Managed SSH port set in the host access bootstrap, public NIC detected, test hypervisor chosen — 2026-11-18
 
 Decided with the user on 18 November 2026 (CET; exact time not recorded,
 implemented 15:56 CET). Implementation commit `1593726` (v0.0.28), private
@@ -508,7 +515,7 @@ CaC commit `9abb493` of the companion repository.
   repository's vault into the private CaC. The source holds no deployment
   version or a name derived from one; the old per-deployment renaming only
   added versioned names at run time and is not carried over.
-- The test server for the WF1 end-to-end run is hactar-ng; its current AAP
+- The test server for the WF1 end-to-end run is the test hypervisor; its current AAP
   instance may be erased for it.
 
 Open, not decided: `AllowUsers` is applied in the host setup without its own
@@ -550,7 +557,7 @@ Three credentials carry them, each injecting only the variables its stage reads:
 The DNS stage's non-secret inputs are inventory variables of
 `AutoDeploy-NGNG`: `dns_zone` and `dns_host_label` from vaulted values, and
 `dns_host_ipv4` from the same `vaulted_robot_expected_server_ip` as
-hactar-ng's `ansible_host`, so the address is stored once.
+the test hypervisor's `ansible_host`, so the address is stored once.
 
 The AAP token belongs to a personal admin token of the old automation and has
 an expiry date; replacing it with a dedicated service account token is a
@@ -626,9 +633,9 @@ The earlier wiring, an inventory variable `vault_images_rclone_conf` read
 directly by the playbook, was a mistake and was corrected before the CaC was
 ever applied.
 
-## hactar-ng in the AutoDeploy-NGNG inventory — 2026-11-18
+## Test hypervisor in the AutoDeploy-NGNG inventory — 2026-11-18
 
-Decided with the user on 18 November 2026. The host `hactar-ng` is added to
+Decided with the user on 18 November 2026. The test hypervisor host is added to
 the new inventory `AutoDeploy-NGNG`, in the group `autodeploy_target` that
 the host stages target. Its `ansible_host` is the expected server address
 from the vault (`vault_robot_expected_server_ip`); the SSH port is the
@@ -636,14 +643,13 @@ default 22, so no `ansible_port` is set at first.
 
 The SSH stage records the port it manages as `ansible_port` on this host
 entry, and the provider reinstall removes it again. The inventory variables
-`aap_inventory_name: AutoDeploy-NGNG` and `aap_inventory_host_name:
-hactar-ng` name the inventory and host for those two tasks.
+`aap_inventory_name: AutoDeploy-NGNG` and `aap_inventory_host_name` name the inventory and host for those two tasks.
 
-The `hactar-ng` entry in the old inventory is untouched.
+The test hypervisor's entry in the old inventory is untouched.
 
-## Images hactar-ng downloads — 2026-11-18
+## Images the test hypervisor downloads — 2026-11-18
 
-Decided with the user on 18 November 2026. hactar-ng downloads exactly five
+Decided with the user on 18 November 2026. The test hypervisor downloads exactly five
 images: `/opt/images/rhel-9.8-x86_64-kvm.qcow2`,
 `/opt/images/goldimg-vm-1.disk.qcow2`, `/opt/images/windows-server-2022.qcow2`,
 `/opt/images/windows-server-2025.qcow2` and `/opt/vms/zabbix-disk.qcow2`.
@@ -675,7 +681,7 @@ taken from their current `authorized_keys` on production hactar, option
 prefixes included, and stored in the vault.
 
 The fail2ban trusted addresses (`host_trusted_public_ips`) reference
-production hactar's and hactar-ng's addresses that are already in the vault
+the production and the test hypervisor's addresses that are already in the vault
 for the provider stages. AAP reaches the hosts through those addresses via
 NAT, so they cover AAP too, and no address is stored twice.
 
@@ -691,9 +697,9 @@ entries are `{name, groups}`.
 ## New machine credential for the ansible account — 2026-11-18
 
 Decided with the user on 18 November 2026. The old credential 30
-"hactar-ng ssh key" holds a key that AAP cannot export, and its public half
+The old hypervisor SSH key credential holds a key that AAP cannot export, and its public half
 is unknown, so a reinstall could not install the matching key. The new
-credential "hactar-ng ansible-NGNG" is built from the vault key, so CaC can
+the hypervisor machine credential is built from the vault key, so CaC can
 recreate it, and its public key is already in the provider key list.
 Credential 30 stays for the old repositories. The bootstrap job uses the new
 credential but logs in as root with the same key.

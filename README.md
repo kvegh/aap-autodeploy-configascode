@@ -358,7 +358,7 @@ ansible-lint and the EE resolve them); `L068` `lineinfile` on `/etc/hosts` (keep
 the installer's other lines); `L071` inline content for the password file;
 `L004` `rpm_key` false positive. Tested by lint, EE syntax check and a render
 test of the firewall rules, sshd settings, jail file and network XML. Not
-executed yet. The end-to-end test host is hactar-ng (decided 18 November
+executed yet. The end-to-end test host is the test hypervisor (decided 18 November
 2026); its current AAP instance may be erased for it.
 
 Host access bootstrap with the move to the managed port, and the SSH listen
