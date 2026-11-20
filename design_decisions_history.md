@@ -1,5 +1,111 @@
 # Design decisions history
 
+## AAP base configuration stage, RHEL update of the AAP VM, snapshot rerun skip — 2026-11-20
+
+Decided by the user on 20 November 2026 (CET; bead bead-wd-0gnz.41),
+implemented the same day. Public implementation commit `4689292` (v0.0.48);
+private CaC commit `31fb2a7` (v0.0.56). Job template 210 — AutoDeploy-NGNG
+12 AAP base config created through the API (inventory AutoDeploy-NGNG,
+project 193, EE ee-proj-aap-cac, Credentials 61 and 19, extra variables
+prompted at launch). Inventory 10 variables merged with `aap_base_user`.
+Project 193 synced (update 5269). No workflow changed, no job launched, no
+CaC apply.
+
+User decisions:
+- Base content: subscription through a Red Hat service account (vault
+  `vaulted_redhat_subscription_client_id`/`_secret`), no manifest in Git,
+  force false; hub collection remotes rh-certified and validated
+  (console.redhat.com, one content token) and community (galaxy.ansible.com,
+  no token); which collections to sync belongs to the use cases.
+- Default EE: our ee-proj-aap-cac (ansible-core 2.20), transferred by a hub
+  container remote pulling it from the deploying AAP's hub; DEFAULT_EXECUTION_
+  ENVIRONMENT set globally. No EE build on the target.
+- Controller to hub: one Gateway token of the new AAP, owner a CaC parameter
+  (admin for now), used by three Galaxy credentials (rh-certified,
+  validated, community on the new hub).
+- Base includes MCP access (a Gateway token for MCP clients, stored in the
+  private vault), the vault credential and the Git write credential.
+- Route timeouts: defaults; set only if a test shows the need.
+- No snapshot after the base configuration.
+- Fixes along the way authorized: `05-rhel-update.yml` hosts overridable by
+  an extra variable (default `autodeploy_target`) and imported by the install
+  stage after registration and before snapshot 1; the snapshot task file
+  skips the shutdown/start cycle when the snapshot exists.
+- Defaults given by the user for the agent (recorded as listed): origin
+  registry pulled without credentials; vault password stored inside the
+  vault (`vaulted_cac_vault_password`) for the vault credential and the
+  re-encryption; Git write credential from its existing vault variable;
+  tokens created only when missing; hub repositories with sync false; an
+  explicit EE sync; the new AAP pulls from its own hub with the controller to
+  hub token; the base tree in a new top-level directory of the private
+  repository.
+
+Agent choices:
+- F1: `hosts: "{{ rhel_update_hosts | default('autodeploy_target') }}"` and
+  `import_playbook` with `vars` in 11 (tested: the play-level variable
+  reaches the hosts pattern on ansible-core 2.16 and 2.20), so no separate
+  workflow node.
+- F2: a `stat` of libvirt's snapshot metadata file and a block with
+  `when`; the `creates:` guard on `virsh` is replaced by `changed_when: true`.
+- Playbook `12-aap-base-config.yml`, one play on localhost; tree directory
+  `aap-base/` (job template extra variable `aap_base_cac_dir`), aligned with
+  the later restructuring (bead-wd-0gnz.44); the vault stays the use case's
+  `env_variables.yml` (one vault file).
+- "Missing" means: no entry for the AAP VM name in the vault dict
+  `vaulted_aap_instance_tokens`. Both tokens (hub and MCP) are created and
+  written together in one vault write, so one condition covers both and no
+  API readback is needed. The hub token is therefore stored in the vault
+  too (not requested).
+- Vault write: GitHub contents API GET (content and blob SHA at the ref),
+  `unvault` with the vault password from the vault, `combine` of the new
+  key, `to_nice_yaml`, `vault` with vault ID `cac`, PUT with the SHA to the
+  ref's branch (`cac_repository_ref`). Consequence: comments and key order
+  in the vault file are lost on such a write.
+- Token scopes: read for the hub token (pull only), write for the MCP token
+  (as the old implementation's MCP admin token; the MCP server is installed
+  read-only by default).
+- The token module sets the fact `aap_token`, which the CoP roles would use
+  as their login; a play variable `aap_token: ""` outranks it (tested on
+  2.20).
+- Login and token owner `aap_base_user` (inventory, `admin`) with
+  `vaulted_aap_installer.gateway_admin_password`; another user needs its
+  own password source.
+- Subscription: CoP `controller_license` included directly, settings in
+  `aap-base/controller_license.yaml` (loaded by `include_vars`, not a
+  filetree_read variable), filters product_name "Red Hat Ansible Automation
+  Platform" and support_level "Premium" (the deploying AAP's subscription);
+  the service account mapped to `redhat_subscription_client_id`/`_secret` as
+  play variables.
+- Hub: repositories carry their distribution (`distribution.name`), sync
+  false. The EE sync is a direct `ah_ee_repository_sync` task with the
+  tree's `timeout` (1800 s): the CoP sync roles wait only about 50 s
+  (`collect_async_status` 50 retries of 1 s), too short for a 1 GB image.
+  Registry name `autodeploy-origin-hub`, include tag `2.0.0` (the tag of the
+  pinned digest on the deploying hub); the EE object pins the digest.
+- Default EE id: `ansible.controller.execution_environment` with
+  `state: exists`, then `ansible.controller.settings`; the tree's only EE is
+  the default.
+- Credential names on the new AAP equal those on the deploying AAP (vault
+  credential, GitHub AutoDeploy CaC Secrets-NGNG, credential type), so use
+  case CaC works on both; new names "Automation Hub rh-certified/validated/
+  community/registry"; all in organization Default.
+- The job template carries no AAP credential: every task logs in to the new
+  AAP, so nothing mixes with the deploying AAP's environment variables.
+  Timeout 3600 s.
+- Retire does not remove the AAP's vault entry yet (open; a redeploy of the
+  same version after a retire would find stale tokens and skip creation).
+
+Checks: ansible-lint production strict 0/0 on 05, 11, 12 and both task files
+(temporary config with the deployment version as extra variable and the rhc
+role mocked; ansible-core 2.16); syntax check of 05 and 12 on ansible-core
+2.20.10; the token condition, the `aap_token` override and the
+unvault/combine/vault chain tested on 2.20.10; `filetree_read` of `aap-base/`
+tested (CoP extended 4.10) with dummy values.
+
+Open before the first run: `vaulted_cac_vault_password` is not in the vault
+yet (the user adds it); the subscription filter assumes a Premium AAP
+subscription is available to the service account.
+
 ## AAP install stage, port-80 ACME challenge, retire of vhost and snapshots — 2026-11-20
 
 Decided by the user on 20 November 2026 (CET; bead bead-wd-0gnz.41),
