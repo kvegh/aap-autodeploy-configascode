@@ -30,12 +30,22 @@
   become: true
   gather_facts: false
   handlers:
-    # nginx is not running here, so there is nothing to reload; a reload
-    # would start it. The test only proves the configuration loads.
+    # The test proves the configuration loads. nginx is reloaded only if it
+    # already runs (a later rerun, after the AAP deployment started it); a
+    # reload of a stopped unit would start it.
     - name: Check the nginx configuration
       ansible.builtin.command:
         argv: [nginx, -t]
       changed_when: false
+
+    - name: Read the service states
+      ansible.builtin.service_facts:
+
+    - name: Reload nginx if it runs
+      ansible.builtin.systemd_service:
+        name: nginx
+        state: reloaded
+      when: ansible_facts.services['nginx.service'].state == 'running'
 
     # Handlers run in the order listed here, so the test runs before the
     # reload; if it fails, the reload does not happen. No module validates
@@ -65,7 +75,10 @@
       loop:
         - {src: nginx.conf.j2, dest: /etc/nginx/nginx.conf}
         - {src: 00-default.conf.j2, dest: /etc/nginx/conf.d/00-default.conf}
-      notify: Check the nginx configuration
+      notify:
+        - Check the nginx configuration
+        - Read the service states
+        - Reload nginx if it runs
 
     # One public file for all vhosts: the standard RFC 7919 ffdhe2048 group.
     # It holds no secret; each vhost keeps its own certificate and key.
