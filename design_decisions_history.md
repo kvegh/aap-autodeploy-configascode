@@ -1,5 +1,15 @@
 # Design decisions history
 
+## Platform token login through module_defaults — 2026-11-20
+
+20 November 2026, 15:28 CET, fix along the way (v29 step run, job 5279 of
+JT 210). Cause: `ansible.platform.token` is in neither the controller nor
+the hub action group, and the collection's action plugin then reads the
+login from the raw play variables, so it got the untemplated
+`https://{{ aap_vm_fqdn }}` as host. Fix: `group/ansible.platform.gateway`
+in the play's `module_defaults` with the same login anchor. Commit
+`ac2062a` (v0.0.50).
+
 ## nginx reload after a web edge configuration change — 2026-11-20
 
 20 November 2026, 14:45 CET, fix along the way during the v29 step run (user
