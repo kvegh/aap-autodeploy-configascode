@@ -60,7 +60,8 @@ Refactored, reviewed and committed:
 | Reboot and verify | about 78 | 14 |
 | Image download | 68 | 9 |
 | AAP VM create | about 147 | 8 |
-| Instance retire | 69 | 9 |
+| AAP DNS and certificate | about 50 | 2 (DNS reuses the host DNS stage) |
+| Instance retire | 69 | 10 |
 
 The reinstall stage removes `ansible_port` from the target's AAP inventory
 host before the erase, so later jobs reach the rebuilt host on port 22, and
@@ -140,8 +141,9 @@ registry. It deletes every A record in the zone that has the version as a
 whole label (`hactar.v24`, `aap.v24`, never `hactar.v240`), then removes the
 versions from the live list with the same SHA-guarded write as the deployment
 version stage. Before DNS it stops, undefines and deletes each version's AAP
-VM and disk on the hypervisor (names from the CaC templates), then removes
-the VM's host from the AAP inventory. VMs, hosts and DNS go before the list, so a failed delete leaves the version live and
+VM and disk on the hypervisor (names from the CaC templates) and deletes the
+certificate of the AAP name with `certbot delete`, then removes the VM's host
+from the AAP inventory. VMs, hosts and DNS go before the list, so a failed delete leaves the version live and
 a rerun finds its names again. After a reinstall the previous version stays
 live and in DNS until it is retired by hand; this is intended. Extension rule:
 every later stage that creates something per instance (VMs, vhosts,
@@ -186,13 +188,25 @@ covers both hops. The filesystem is grown in the installation stage. The
 instance retire job removes the VM, its disk and its inventory host. Only the
 first AAP VM (fixed reservation) is built; further VMs are future work.
 
+The AAP name `aap_vm_fqdn` is published by the host DNS stage itself:
+`02-host-dns-publish.yml` runs unchanged under its own job template, whose
+extra variables set `host_dns_record` and `host_fqdn` to the AAP name. The
+record points to the hypervisor's public address, like the host name.
+`10-aap-certificate-request.yml` then enables and starts nginx on the
+hypervisor (the web edge stage left it stopped) and runs `certbot certonly
+--webroot` for the AAP name into the web edge stage's webroot
+`/var/lib/letsencrypt`, with the account address `host_certbot_email` from the
+CaC; `creates:` skips it once the certificate exists. No temporary nginx
+configuration: the AAP vhost is written once, after the AAP install. The
+instance retire job deletes the certificate.
+
 Step 15 of the old host rebuild workflow, the old replacement playbook run on
 its own as the last node, is dropped: it switched on VM network isolation and
 made libvirt depend on that firewall, which the new design does not want.
 The old `aap.yml` dispatcher, which every job template ran first, is dropped
 as well: each job template points directly at its own playbook.
 
-Not yet started: the stages after the AAP VM. Nothing here has run
+Not yet started: the AAP installation and the stages after it. Nothing here has run
 against a real server yet. The old repositories remain the working implementation until a
 stage has been proven here.
 

@@ -14,7 +14,7 @@ secrets are vault encrypted.
 
 ## What exists today
 
-Ten stages:
+Eleven stages:
 
 - `playbooks/00-provider-reinstall.yml`, fourteen tasks, reinstalls a confirmed
   dedicated server with Rocky Linux 9 and removes the managed SSH port from its
@@ -55,11 +55,15 @@ Ten stages:
   the AAP VM `aap27-vXY` with the fixed MAC of the reservation `aap`, records
   it as host `aap27-vXY` in the AAP inventory (reserved address, jump through
   the hypervisor) and proves login and sudo through that jump.
+- `playbooks/10-aap-certificate-request.yml`, two tasks, starts nginx on the
+  hypervisor and obtains the Let's Encrypt certificate of the AAP name with
+  `certbot --webroot`. Before it, the AAP name's DNS record comes from
+  `02-host-dns-publish.yml`, unchanged, through its own job template.
 
 Three jobs outside the deployment workflow, started by hand:
 
-- `playbooks/instance-retire.yml`, nine tasks, retires the versions named in
-  its survey: removes their AAP VMs, disks and AAP inventory hosts, deletes every A record with the version as a label and removes
+- `playbooks/instance-retire.yml`, ten tasks, retires the versions named in
+  its survey: removes their AAP VMs, disks, certificates and AAP inventory hosts, deletes every A record with the version as a label and removes
   the versions from the live list. Every later stage that creates something
   per instance adds its own cleanup step here.
 - `playbooks/aap-cac-apply.yml` applies the CaC of one use case from the

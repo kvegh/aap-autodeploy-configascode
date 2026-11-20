@@ -6,12 +6,13 @@
 # template, started by hand with the versions in the survey.
 #
 # Everything an instance owns is found by the version in its name; there is no
-# separate registry. This version cleans four things:
+# separate registry. This version cleans five things:
 #   1. the AAP VM on the hypervisor (stopped and undefined) and its disk
-#   2. the AAP VM's host in the AAP inventory
-#   3. every A record in the zone with the version as a whole label, for
+#   2. the Let's Encrypt certificate of the AAP name on the hypervisor
+#   3. the AAP VM's host in the AAP inventory
+#   4. every A record in the zone with the version as a whole label, for
 #      example hactar.v24 and aap.v24, but never hactar.v240
-#   4. the version in the live list of the deployment counter
+#   5. the version in the live list of the deployment counter
 # The live list is written last, so a failure leaves the version live and a
 # rerun finds everything again.
 #
@@ -34,6 +35,7 @@
 #   dns_zone               DNS zone, for example example.com
 #   aap_vm_name            AAP VM name, a template on autodeploy_deployment_version
 #   aap_vm_disk_path       its disk, a template on aap_vm_name
+#   aap_vm_fqdn            AAP name, the name of its certificate
 #   aap_inventory_name     AAP inventory the VM's host is recorded in
 
 - name: Check the deployment versions to retire
@@ -85,7 +87,7 @@
           {{ counter_live | join(', ') }}. Nothing was changed.
 
 # A failure here must stop the whole run before DNS and the live list change.
-- name: Remove the AAP VMs of the retired versions
+- name: Remove the AAP VMs and certificates of the retired versions
   hosts: autodeploy_target
   become: true
   gather_facts: false
@@ -104,6 +106,16 @@
       ansible.builtin.file:
         path: "{{ aap_vm_disk_path }}"
         state: absent
+      loop: "{{ hostvars['localhost'].retire_labels }}"
+      vars:
+        autodeploy_deployment_version: "{{ item }}"
+
+    # certbot keeps a certificate in three directories plus its renewal
+    # configuration; its own delete removes all of them.
+    - name: Delete the certificate of the AAP name
+      ansible.builtin.command:
+        argv: [certbot, delete, --cert-name, "{{ aap_vm_fqdn }}", --non-interactive]
+        removes: "/etc/letsencrypt/live/{{ aap_vm_fqdn }}"
       loop: "{{ hostvars['localhost'].retire_labels }}"
       vars:
         autodeploy_deployment_version: "{{ item }}"
