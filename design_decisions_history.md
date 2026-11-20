@@ -1,5 +1,24 @@
 # Design decisions history
 
+## Shared AutoDeploy CA confirmed, given to the AAP installer — 2026-11-20
+
+20 November 2026 (CET), decided by the user (confirms the decision of 19 November).
+Every AAP deployed by AutoDeploy gets its service certificates from one shared
+AutoDeploy CA: the installer receives it through `ca_tls_cert`/`ca_tls_key` (AAP 2.7
+install guide, custom TLS certificates: "the installation program automatically
+creates TLS certificates for each Ansible Automation Platform service using your
+provided CA certificate"). hactar-ng trusts that CA so its nginx verifies the AAP VM's
+certificate (`proxy_ssl_verify on`), and hubs in a deployment chain trust each other
+without exchanging CAs.
+
+Alternative considered: each installer's own CA (key stays on its VM, never in Git,
+smaller blast radius) with a CA exchange after every install and in every chain link.
+Accepted trade-off: a leaked shared key affects all AAPs; the key is vault-encrypted in
+the private repo and decrypted only during install; the CA secures only internal
+connections (the public side uses Let's Encrypt). For real production an
+intermediate CA per environment from a real PKI would be used. CA material not
+generated yet (validity to be decided). v0.0.45.
+
 ## AAP DNS record and certificate stage, retire of the certificate — 2026-11-20
 
 Decided by the user on 19 November 2026 (CET; bead bead-wd-0gnz.41),
