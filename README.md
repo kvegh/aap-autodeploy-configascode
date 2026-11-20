@@ -59,8 +59,8 @@ Refactored, reviewed and committed:
 | Host setup (8 stages) | about 368 | 32 + 5 handlers |
 | Reboot and verify | about 78 | 14 |
 | Image download | 68 | 9 |
-| AAP VM create | about 147 | 4 |
-| Instance retire | 69 | 8 |
+| AAP VM create | about 147 | 8 |
+| Instance retire | 69 | 9 |
 
 The reinstall stage removes `ansible_port` from the target's AAP inventory
 host before the erase, so later jobs reach the rebuilt host on port 22, and
@@ -140,7 +140,8 @@ registry. It deletes every A record in the zone that has the version as a
 whole label (`hactar.v24`, `aap.v24`, never `hactar.v240`), then removes the
 versions from the live list with the same SHA-guarded write as the deployment
 version stage. Before DNS it stops, undefines and deletes each version's AAP
-VM and disk on the hypervisor (names from the CaC templates). VMs and DNS go before the list, so a failed delete leaves the version live and
+VM and disk on the hypervisor (names from the CaC templates), then removes
+the VM's host from the AAP inventory. VMs, hosts and DNS go before the list, so a failed delete leaves the version live and
 a rerun finds its names again. After a reinstall the previous version stays
 live and in DNS until it is retired by hand; this is intended. Extension rule:
 every later stage that creates something per instance (VMs, vhosts,
@@ -175,10 +176,15 @@ relabel. No cloud-init. `community.libvirt.virt_install` then imports it as
 `aap_vm_name` (`aap27-vXY`) with the CaC sizes, the RHEL 9 OS type (virtio),
 autostart and the fixed MAC of the reservation `aap` in
 `net_internal.reservations`. Once the VM is defined, a rerun touches neither
-the disk nor the VM. The filesystem is grown in the installation stage. The
-instance retire job removes the VM and its disk. Not yet built: the static
-inventory host for the VM behind the hypervisor and the login proof (open
-question: the inventory host name cannot carry the version).
+the disk nor the VM. It then records the VM as host `aap_vm_name` in the AAP
+inventory with the host variables of the CaC dict `aap_vm_connection`
+(`ansible_host` from the reservation `aap`, `ansible_fqdn`, and
+`ansible_ssh_common_args` with a ProxyCommand through the hypervisor's managed
+port), adds it to the run with `add_host` from the same dict, waits for the
+connection and proves login and sudo with `ping`. The machine credential
+covers both hops. The filesystem is grown in the installation stage. The
+instance retire job removes the VM, its disk and its inventory host. Only the
+first AAP VM (fixed reservation) is built; further VMs are future work.
 
 Step 15 of the old host rebuild workflow, the old replacement playbook run on
 its own as the last node, is dropped: it switched on VM network isolation and

@@ -15,12 +15,20 @@
 # address is known before it exists, and starts with the host. Its RHEL 9 OS
 # type gives it virtio disk and network devices.
 #
+# The VM is recorded as a host of the AAP inventory, named like the VM, with
+# its connection values from the CaC: the reserved address, the FQDN, and SSH
+# through the hypervisor as jump host. This run reaches it with the same
+# values and proves login and sudo.
+#
 # Rerunnable: once the VM is defined, the disk is neither resized nor
 # customized again and the VM is left as it is. A run that failed before the
 # VM was defined repeats the preparation on the same copy.
 #
 # Runs as the automation account on the port the host access bootstrap
-# recorded in the AAP inventory.
+# recorded in the AAP inventory. The machine credential logs in on both hops,
+# the hypervisor and the VM. The standard Red Hat Ansible Automation Platform
+# credential hands the controller URL and login to ansible.controller as
+# environment variables.
 #
 # Required variables, from the CaC inventory unless noted:
 #   autodeploy_deployment_version   from the deployment version stage, for example v29
@@ -35,6 +43,9 @@
 #   aap_vm_network         libvirt network
 #   aap_vm_mac             MAC of the network's DHCP reservation for the VM
 #   aap_vm_autostart       start the VM with the host
+#   aap_vm_connection      host variables of the VM: ansible_host, ansible_fqdn,
+#                          ansible_ssh_common_args (jump through the hypervisor)
+#   aap_inventory_name     AAP inventory the VM is recorded in
 #   host_automation_user   automation account, the user of the AAP machine credential
 #   host_authorized_keys   dict user name -> list of public keys
 #   host_automation_sudo_rule  sudoers rule of the automation account
@@ -105,3 +116,28 @@
             mac:
               address: "{{ aap_vm_mac }}"
         autostart: "{{ aap_vm_autostart }}"
+
+    - name: Record the AAP VM in the AAP inventory
+      ansible.controller.host:
+        name: "{{ aap_vm_name }}"
+        inventory: "{{ aap_inventory_name }}"
+        variables: "{{ aap_vm_connection }}"
+      delegate_to: localhost
+      become: false
+
+    # The recorded host is in AAP, not in this run's inventory.
+    - name: Add the AAP VM to this run with the recorded connection values
+      ansible.builtin.add_host:
+        name: "{{ aap_vm_name }}"
+        ansible_host: "{{ aap_vm_connection.ansible_host }}"
+        ansible_fqdn: "{{ aap_vm_connection.ansible_fqdn }}"
+        ansible_ssh_common_args: "{{ aap_vm_connection.ansible_ssh_common_args }}"
+
+    - name: Wait until the AAP VM accepts SSH logins through the hypervisor
+      ansible.builtin.wait_for_connection:
+      delegate_to: "{{ aap_vm_name }}"
+
+    - name: Prove login and sudo on the AAP VM
+      ansible.builtin.ping:
+      delegate_to: "{{ aap_vm_name }}"
+      become: true

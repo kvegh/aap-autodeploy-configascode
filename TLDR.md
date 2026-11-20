@@ -49,16 +49,17 @@ Ten stages:
   `/opt` when an image is missing, installs rclone, downloads each missing VM
   image from Google Drive and requires its pinned SHA-256. A corrupt file fails with its name and is
   deleted by hand before a rerun.
-- `playbooks/09-aap-vm-create.yml`, four tasks, copies the golden image into
+- `playbooks/09-aap-vm-create.yml`, eight tasks, copies the golden image into
   the vms pool, grows it, prepares it with virt-customize (FQDN, automation
   account with key and sudo, empty machine-id, no registration) and creates
-  the AAP VM `aap27-vXY` with the fixed MAC of the reservation `aap`. Login
-  proof through the hypervisor not built yet.
+  the AAP VM `aap27-vXY` with the fixed MAC of the reservation `aap`, records
+  it as host `aap27-vXY` in the AAP inventory (reserved address, jump through
+  the hypervisor) and proves login and sudo through that jump.
 
 Three jobs outside the deployment workflow, started by hand:
 
-- `playbooks/instance-retire.yml`, eight tasks, retires the versions named in
-  its survey: removes their AAP VMs and disks, deletes every A record with the version as a label and removes
+- `playbooks/instance-retire.yml`, nine tasks, retires the versions named in
+  its survey: removes their AAP VMs, disks and AAP inventory hosts, deletes every A record with the version as a label and removes
   the versions from the live list. Every later stage that creates something
   per instance adds its own cleanup step here.
 - `playbooks/aap-cac-apply.yml` applies the CaC of one use case from the
