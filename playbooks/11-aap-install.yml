@@ -2,7 +2,8 @@
 # Install AAP on the AAP VM of a deployment version and publish it through
 # the hypervisor's nginx.
 #
-# Order: register the VM with Red Hat; cold snapshot 1; trust the shared
+# Order: register the VM with Red Hat; update it with the RHEL update stage
+# (05-rhel-update.yml, reboot if anything changed); cold snapshot 1; trust the shared
 # AutoDeploy CA, grow the root partition and XFS, resolve the AAP name
 # locally, install ansible-core; run the containerized installer from the
 # setup bundle in the golden image with an inventory rendered from this
@@ -17,7 +18,7 @@
 # directory, which goes away with the job.
 #
 # Rerunnable: the installer is designed to be rerun; existing snapshots are
-# kept (the VM is still shut down and started for them).
+# kept and the VM is not shut down for them again.
 #
 # Credentials: the hypervisor's machine credential (both SSH hops), Red Hat
 # Subscription-NGNG (rhsm_org_id, rhsm_activation_key), GitHub AutoDeploy
@@ -71,6 +72,11 @@
             keys:
               - "{{ rhsm_activation_key }}"
         rhc_organization: "{{ rhsm_org_id }}"
+
+- name: Update the AAP VM to the latest packages
+  ansible.builtin.import_playbook: 05-rhel-update.yml
+  vars:
+    rhel_update_hosts: "aap*-{{ autodeploy_deployment_version }}"
 
 - name: Take the cold snapshot before the AAP install
   hosts: autodeploy_target

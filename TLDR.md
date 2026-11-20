@@ -14,7 +14,7 @@ secrets are vault encrypted.
 
 ## What exists today
 
-Twelve stages:
+Thirteen stages:
 
 - `playbooks/00-provider-reinstall.yml`, fourteen tasks, reinstalls a confirmed
   dedicated server with Rocky Linux 9 and removes the managed SSH port from its
@@ -36,7 +36,8 @@ Twelve stages:
 - `playbooks/04-rhel-convert.yml`, fourteen tasks, converts Rocky Linux 9 to
   RHEL 9 with `convert2rhel` and proves a Red Hat kernel runs.
 - `playbooks/05-rhel-update.yml`, two tasks, updates all packages and reboots
-  if anything changed.
+  if anything changed; `rhel_update_hosts` points it at another host, which
+  the AAP install stage uses for the AAP VM.
 - `playbooks/06-host-setup.yml`, 32 tasks in eight stages, configures the
   hypervisor: base, virtualization, SELinux, storage (pools and
   `/opt/images`), networks, firewall (web ports), web edge (nginx installed,
@@ -59,11 +60,18 @@ Twelve stages:
   hypervisor and obtains the Let's Encrypt certificate of the AAP name with
   `certbot --webroot`. Before it, the AAP name's DNS record comes from
   `02-host-dns-publish.yml`, unchanged, through its own job template.
-- `playbooks/11-aap-install.yml`, 28 tasks, registers the AAP VM, takes cold
-  snapshots before and after the install, trusts the shared CA, grows the
+- `playbooks/11-aap-install.yml`, 30 tasks, registers and updates the AAP VM
+  (imports the RHEL update stage), takes cold snapshots before and after the
+  install (kept on a rerun), trusts the shared CA, grows the
   disk, runs the containerized installer with an inventory rendered from this
   repository (secrets from the private vault), proves the Gateway locally,
   writes the AAP vhost on the hypervisor and proves the public URL.
+- `playbooks/12-aap-base-config.yml`, thirteen tasks, gives the new AAP its
+  base configuration through its public URL: Gateway tokens for its own hub
+  and for MCP clients (created once, stored in the private vault), the
+  subscription, and the private repository's base tree applied with the CoP
+  collections (hub sources, default EE from the deploying AAP's hub,
+  credentials), then the EE sync and the global default EE.
 
 Three jobs outside the deployment workflow, started by hand:
 

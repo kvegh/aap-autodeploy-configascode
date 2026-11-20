@@ -61,7 +61,8 @@ Refactored, reviewed and committed:
 | Image download | 68 | 9 |
 | AAP VM create | about 147 | 8 |
 | AAP DNS and certificate | about 50 | 2 (DNS reuses the host DNS stage) |
-| AAP install | 49 | 28 (18 + snapshot and download task files) + 3 handlers |
+| AAP install | 49 | 30 (18 + snapshot and download task files) + 3 handlers, plus the RHEL update stage |
+| AAP base config | about 300 (74 + about 230 in task files) | 13 + download task file |
 | Instance retire | 69 | 12 + 1 handler |
 
 The reinstall stage removes `ansible_port` from the target's AAP inventory
@@ -211,9 +212,12 @@ as well: each job template points directly at its own playbook.
 The installation stage (`11-aap-install.yml`) takes the deployment version as
 an extra variable and targets the VM's inventory host
 (`aap*-<version>`) and the hypervisor group. It registers the VM with `rhc`
-(the activation key of the conversion stage, no AAP repository), takes a cold
-libvirt snapshot (shut down, `virsh snapshot-create-as`, start, wait for SSH;
-names from `aap_vm_snapshot_names`), adds the shared AutoDeploy CA to the
+(the activation key of the conversion stage, no AAP repository), updates it
+by importing `05-rhel-update.yml` with `rhel_update_hosts` set to the VM's
+host pattern, takes a cold libvirt snapshot (shut down,
+`virsh snapshot-create-as`, start, wait for SSH; names from
+`aap_vm_snapshot_names`; a rerun skips an existing snapshot without shutting
+the VM down), adds the shared AutoDeploy CA to the
 VM's trust store, grows the root partition and XFS, resolves the AAP name to
 the VM in `/etc/hosts` and installs `ansible-core`. It downloads the private
 repository with the GitHub credential (task file shared with the CaC apply
@@ -225,14 +229,34 @@ into the bundle directory and runs the containerized installer as
 install. A second cold snapshot follows, then the hypervisor gets the AAP
 vhost (Let's Encrypt certificate, upstream verified with the shared CA, login
 rate limit; `nginx -t` before the reload), and a ping of the public URL proves
-the path end to end. The RHEL update of the VM is not part of it yet:
-`05-rhel-update.yml` targets `autodeploy_target` only.
+the path end to end.
+
+The base configuration stage (`12-aap-base-config.yml`) runs on the deploying
+AAP's execution environment against the new AAP's public URL, logged in as
+`aap_base_user` (admin) with the installer's admin password from the vault.
+When the vault has no tokens for the AAP VM yet, it creates two Gateway
+tokens (read scope for the AAP's own hub, write scope for MCP clients) and
+writes them into the vault file through the GitHub contents API: decrypted
+with the vault password kept in the vault itself, the AAP's key added under
+`vaulted_aap_instance_tokens`, encrypted again, sent with the blob SHA. It
+attaches the subscription with the CoP role `controller_license` (Red Hat
+service account, filter from the CaC), then reads the private repository's
+base tree (`aap_base_cac_dir`, outside `usecases/` so the CaC apply job never
+applies it to the deploying AAP) with `filetree_read` and applies it with
+`dispatch`: collection remotes rh-certified, validated and community with
+their repositories and distributions (no sync), the deploying AAP's hub as an
+anonymous container registry and the repository of the default EE, the Git
+write credential type, the vault, Git write, three Galaxy and one registry
+credential on the AAP's own hub, the default EE pinned by digest, and the
+Galaxy credentials of organization Default. Last, it syncs the EE repository
+itself (the CoP sync role stops waiting after about 50 s) and sets
+`DEFAULT_EXECUTION_ENVIRONMENT`. Route timeouts keep their defaults.
 
 The web edge's port-80 catch-all serves `/.well-known/acme-challenge/` from
 the certbot webroot for every name and answers everything else with 444, so
 Let's Encrypt issuance and renewal need no per-name port-80 server.
 
-Not yet started: the stages after the AAP installation. Nothing here has run
+Not yet started: the stages after the AAP base configuration. Nothing here has run
 against a real server yet. The old repositories remain the working implementation until a
 stage has been proven here.
 
