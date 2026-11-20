@@ -1,5 +1,16 @@
 # Design decisions history
 
+## nginx reload after a web edge configuration change — 2026-11-20
+
+20 November 2026, 14:45 CET, fix along the way during the v29 step run (user
+authorization, bead bead-wd-0gnz.41). Cause: the web edge handler only ran
+`nginx -t`, so a running nginx kept serving the old catch-all server and the
+port-80 ACME challenge fix did not take effect. Fix: two more handlers,
+`service_facts` and a `systemd_service` reload when nginx runs; a stopped
+nginx stays stopped (the certificate stage starts it). Commit `8069ccf`
+(v0.0.49). Step job templates 195, 200, 206, 207, 208 now prompt for extra
+variables (private `663b0f3`).
+
 ## AAP base configuration stage, RHEL update of the AAP VM, snapshot rerun skip — 2026-11-20
 
 Decided by the user on 20 November 2026 (CET; bead bead-wd-0gnz.41),
