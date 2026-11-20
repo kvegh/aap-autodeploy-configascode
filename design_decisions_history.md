@@ -1,5 +1,37 @@
 # Design decisions history
 
+## AAP VM inventory host and login proof, retire of the host — 2026-11-19
+
+Decided by the user on 19 November 2026 (CET; bead bead-wd-0gnz.41),
+implemented 19 November 2026. Public implementation commit `a7e7a0a`
+(v0.0.43); private CaC commit `eb33799` (v0.0.43). AAP changes through the
+API: Credential 66 AAP API-NGNG attached to JT 206, Credential 62 hactar-ng
+ansible-NGNG attached to JT 205; Inventory 10 variables merged with the 13
+missing CaC keys (`aap_version_short`, `aap_vm_*`, `aap_vm_connection`),
+existing keys unchanged, live equal to the CaC; Project 193 synced once
+(update 5265). No CaC apply, no job launched.
+
+User decisions:
+- Step 09 creates the AAP VM's host `aap27-vXY` in the AAP inventory
+  AutoDeploy-NGNG at run time (`ansible.controller.host`), with
+  `ansible_host` from the reservation `aap`, `ansible_fqdn`
+  `aap27.vXY.<dns_zone>` and `ansible_ssh_common_args` with a ProxyCommand
+  through hactar-ng's managed port as the automation account. The values are
+  defined once, in the CaC dict `aap_vm_connection`; the same run reaches the
+  VM with `add_host` from that dict.
+- After the VM starts: `wait_for_connection` through the jump, then `ping`
+  with become. Credential 62 covers both hops.
+- Only the first AAP VM (fixed reservation `aap`); further VMs with DHCP
+  addresses are future work (bead-wd-0gnz.42).
+- Retire: one `ansible.controller.host state: absent` per retired version.
+
+Implementer choices: the dict name `aap_vm_connection`; the jump address
+`robot_expected_server_ip` and port `host_ssh_port`; the wait and the ping
+run in the same play, delegated to the added host; the inventory host is
+recorded right after the VM is created, before the wait; in the retire job
+the host removal runs before DNS. Checks: ansible-lint production strict 0/0
+on both playbooks; render test of `aap_vm_connection` for v29.
+
 ## AAP VM create stage, deployment version input, retire of the VM — 2026-11-19
 
 Decided by the user on 19 November 2026 (CET; exact times in bead
