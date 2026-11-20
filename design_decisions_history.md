@@ -1,5 +1,61 @@
 # Design decisions history
 
+## AAP install stage, port-80 ACME challenge, retire of vhost and snapshots — 2026-11-20
+
+Decided by the user on 20 November 2026 (CET; bead bead-wd-0gnz.41),
+implemented the same day. Public implementation commit `4ff9e5b` (v0.0.47);
+private CaC commit `be8572c` (v0.0.54). Job template 209 — AutoDeploy-NGNG
+11 AAP install created through the API (inventory AutoDeploy-NGNG, project
+193, EE ee-proj-aap-cac, Credentials 62, 65, 61, 19, extra variables
+prompted at launch). Inventory 10 variables merged with the 11 new keys.
+Project 193 synced (update 5267). No workflow changed, no job launched, no
+CaC apply.
+
+User decisions:
+- Port 80: the catch-all server serves `/.well-known/acme-challenge/` from
+  the certbot webroot for every name; everything else unchanged (444).
+- Targeting: the deployment version is an extra variable; VM plays use
+  `hosts: "aap*-<version>"` against the inventory host of the AAP VM stage,
+  hypervisor plays the existing group. No add_host.
+- Registration with `rhc` (SCA), the activation key and organization of the
+  conversion stage; no AAP RPM repository.
+- RHEL update by reusing `05-rhel-update.yml` unchanged. Not built: it
+  targets `autodeploy_target` only and cannot reach the VM unchanged (open).
+- Cold snapshots before and after the install: shut down, snapshot
+  (`virsh snapshot-create-as`, no module), start, wait for SSH; names from
+  the CaC.
+- The VM trusts the shared CA (anchor plus `update-ca-trust`); growpart and
+  XFS growth with disk and partition from the CaC; the AAP name in
+  `/etc/hosts`; ansible-core only.
+- Installer secrets: option B, the private repository downloaded with the
+  GitHub credential and its vault file decrypted with the vault credential,
+  as the CaC apply job does; the download is one task file shared by both.
+  One shared set of secrets, the vault dict `vaulted_aap_installer` (KISS).
+- Installer inventory: a template in this repository, written from the AAP
+  2.7 containerized install guide (growth topology, bundle install,
+  `hub_seed_collections=false`, `ca_tls_cert`/`ca_tls_key`), with the
+  `[ansiblemcp]` group for the MCP server; no `hub_gunicorn_timeout`.
+- Installer as `aap_install_user`, async 7200 s, poll 30 s; Gateway ping on
+  the VM against the shared CA; public ping through the hypervisor's nginx.
+- AAP vhost written only here: Let's Encrypt certificate, upstream verified
+  with the shared CA, login rate limit, `nginx -t` before the reload.
+- Retire: removes the AAP vhost and the VM snapshots.
+
+Implementer choices: playbook `11-aap-install.yml` with task files
+`tasks/aap-vm-cold-snapshot.yml` (imported twice) and
+`tasks/private-repository-download.yml`; templates in `playbooks/templates/`;
+power-off wait on the QEMU pid file (libvirt reports "shutdown" while the
+guest is still stopping); snapshot idempotency through libvirt's snapshot
+metadata file; `community.general.filesystem` for the XFS growth; the CA
+anchor file doubles as `ca_tls_cert`, the CA key goes into the bundle
+directory (0600); the rate limit zone in its own `conf.d` file (shared by all
+AAP vhosts), zone size 10m; `redis_mode` and the PostgreSQL admin user from
+the guide's growth example as CaC values; no `mcp_*` variables (all
+optional); retire deletes snapshots before undefining the VM (libvirt refuses
+otherwise). Checks: ansible-lint production strict 0/0 on the changed
+playbooks and task files (deployment version given as a lint extra variable
+for the templated hosts pattern); template render test.
+
 ## Environment names removed from the public repo — 2026-11-20
 
 20 November 2026 (CET), approved by the user: the public repo must not name hosts.
