@@ -74,6 +74,9 @@
       aap_password: "{{ aap_password }}"
       aap_validate_certs: "{{ aap_validate_certs }}"
     group/ansible.hub.hub: *aap_login
+    # Without it, ansible.platform's action plugins read the login from the
+    # raw, untemplated play variables.
+    group/ansible.platform.gateway: *aap_login
   tasks:
     - name: Download the private repository
       ansible.builtin.import_tasks: tasks/private-repository-download.yml
