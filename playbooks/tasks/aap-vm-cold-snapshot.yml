@@ -1,0 +1,38 @@
+---
+# Take a cold libvirt snapshot of the AAP VM on the hypervisor: shut the VM
+# down, snapshot it, start it again and wait until it accepts SSH logins.
+# Imported twice by 11-aap-install.yml, before and after the AAP install.
+#
+# Required variables:
+#   aap_vm_snapshot          snapshot name, one of aap_vm_snapshot_names
+#   aap_vm_name              VM name, also its AAP inventory host
+#   aap_vm_shutdown_timeout  seconds the guest may take to power off
+
+- name: Shut the AAP VM down
+  community.libvirt.virt:
+    name: "{{ aap_vm_name }}"
+    state: shutdown
+
+# libvirt reports "shutdown" already while the guest is still stopping; its
+# QEMU process (and pid file) is gone only once the VM is off.
+- name: Wait until the AAP VM is off
+  ansible.builtin.wait_for:
+    path: "/run/libvirt/qemu/{{ aap_vm_name }}.pid"
+    state: absent
+    timeout: "{{ aap_vm_shutdown_timeout }}"
+
+# community.libvirt has no snapshot module. libvirt keeps each snapshot's
+# metadata in the file below, so a rerun skips an existing snapshot.
+- name: Take the snapshot of the stopped AAP VM
+  ansible.builtin.command:
+    argv: [virsh, snapshot-create-as, --domain, "{{ aap_vm_name }}", --name, "{{ aap_vm_snapshot }}"]
+    creates: "/var/lib/libvirt/qemu/snapshot/{{ aap_vm_name }}/{{ aap_vm_snapshot }}.xml"
+
+- name: Start the AAP VM
+  community.libvirt.virt:
+    name: "{{ aap_vm_name }}"
+    state: running
+
+- name: Wait until the AAP VM accepts SSH logins through the hypervisor
+  ansible.builtin.wait_for_connection:
+  delegate_to: "{{ aap_vm_name }}"

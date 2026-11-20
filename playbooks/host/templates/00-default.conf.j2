@@ -9,8 +9,17 @@ server {
     ssl_reject_handshake on;
 }
 
+# Port 80 answers only Let's Encrypt HTTP-01 challenges, for every name, from
+# the certbot webroot, so issuance and renewal need no vhost of their own.
 server {
     listen {{ host_web_edge_http_port }} default_server;
     server_name _;
-    return 444;
+
+    location /.well-known/acme-challenge/ {
+        root /var/lib/letsencrypt;
+    }
+
+    location / {
+        return 444;
+    }
 }

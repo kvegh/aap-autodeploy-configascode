@@ -1,0 +1,68 @@
+# Managed by aap-autodeploy-configascode
+#
+# AAP 2.7 containerized installer inventory, growth topology (all-in-one):
+# every component and its database on this host, bundle (disconnected)
+# installation. Structure from the AAP 2.7 containerized installation guide;
+# values from the CaC, secrets from the vault dict vaulted_aap_installer.
+
+[automationgateway]
+{{ aap_vm_fqdn }}
+
+[automationcontroller]
+{{ aap_vm_fqdn }}
+
+[automationhub]
+{{ aap_vm_fqdn }}
+
+[automationeda]
+{{ aap_vm_fqdn }}
+
+# Required whenever automationcontroller is present.
+[automationmetrics]
+{{ aap_vm_fqdn }}
+
+# MCP server; every mcp_* variable is optional (read-only by default).
+[ansiblemcp]
+{{ aap_vm_fqdn }}
+
+[database]
+{{ aap_vm_fqdn }}
+
+[all:vars]
+# The installer runs on the host it installs.
+ansible_connection=local
+
+postgresql_admin_username={{ aap_installer_postgresql_admin_username }}
+postgresql_admin_password={{ vaulted_aap_installer.postgresql_admin_password }}
+
+redis_mode={{ aap_installer_redis_mode }}
+
+# Container images come from the bundle, not from a registry.
+bundle_install=true
+bundle_dir={{ aap_installer_dir }}/bundle
+
+# Service certificates signed by the shared AutoDeploy CA.
+ca_tls_cert={{ aap_installer_ca_cert }}
+ca_tls_key={{ aap_installer_ca_key }}
+
+gateway_admin_password={{ vaulted_aap_installer.gateway_admin_password }}
+gateway_pg_host={{ aap_vm_fqdn }}
+gateway_pg_password={{ vaulted_aap_installer.gateway_pg_password }}
+
+controller_admin_password={{ vaulted_aap_installer.controller_admin_password }}
+controller_pg_host={{ aap_vm_fqdn }}
+controller_pg_password={{ vaulted_aap_installer.controller_pg_password }}
+
+hub_admin_password={{ vaulted_aap_installer.hub_admin_password }}
+hub_pg_host={{ aap_vm_fqdn }}
+hub_pg_password={{ vaulted_aap_installer.hub_pg_password }}
+hub_seed_collections={{ aap_installer_hub_seed_collections }}
+
+eda_admin_password={{ vaulted_aap_installer.eda_admin_password }}
+eda_pg_host={{ aap_vm_fqdn }}
+eda_pg_password={{ vaulted_aap_installer.eda_pg_password }}
+
+automationmetrics_pg_host={{ aap_vm_fqdn }}
+automationmetrics_pg_password={{ vaulted_aap_installer.automationmetrics_pg_password }}
+automationmetrics_controller_read_pg_host={{ aap_vm_fqdn }}
+automationmetrics_controller_read_pg_password={{ vaulted_aap_installer.automationmetrics_controller_read_pg_password }}

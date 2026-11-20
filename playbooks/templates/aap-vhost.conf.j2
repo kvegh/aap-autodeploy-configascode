@@ -1,0 +1,35 @@
+# Managed by aap-autodeploy-configascode
+#
+# Public entry of the AAP {{ aap_vm_fqdn }}: TLS with its Let's Encrypt
+# certificate, proxied to the AAP VM, whose certificate must be signed by the
+# shared AutoDeploy CA. Logins are rate limited per client address.
+server {
+    listen {{ host_web_edge_https_port }} ssl;
+    server_name {{ aap_vm_fqdn }};
+
+    ssl_certificate /etc/letsencrypt/live/{{ aap_vm_fqdn }}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{ aap_vm_fqdn }}/privkey.pem;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    proxy_ssl_verify on;
+    proxy_ssl_trusted_certificate {{ aap_nginx_ca_file }};
+    proxy_ssl_server_name on;
+    proxy_ssl_name {{ aap_vm_fqdn }};
+
+    # Every location inherits these; websockets need the upgrade headers.
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+
+    location = /api/gateway/v1/login/ {
+        limit_req zone={{ aap_nginx_login_zone }} burst={{ aap_nginx_login_burst }} nodelay;
+        proxy_pass https://{{ aap_vm_connection.ansible_host }};
+    }
+
+    location / {
+        proxy_pass https://{{ aap_vm_connection.ansible_host }};
+    }
+}

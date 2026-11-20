@@ -7,8 +7,10 @@
 #
 # Everything an instance owns is found by the version in its name; there is no
 # separate registry. This version cleans five things:
-#   1. the AAP VM on the hypervisor (stopped and undefined) and its disk
-#   2. the Let's Encrypt certificate of the AAP name on the hypervisor
+#   1. the AAP VM's snapshots, the VM on the hypervisor (stopped and
+#      undefined) and its disk
+#   2. the AAP vhost and the Let's Encrypt certificate of the AAP name on the
+#      hypervisor
 #   3. the AAP VM's host in the AAP inventory
 #   4. every A record in the zone with the version as a whole label, for
 #      example host.v24 and aap.v24, but never host.v240
@@ -35,7 +37,8 @@
 #   dns_zone               DNS zone, for example example.com
 #   aap_vm_name            AAP VM name, a template on autodeploy_deployment_version
 #   aap_vm_disk_path       its disk, a template on aap_vm_name
-#   aap_vm_fqdn            AAP name, the name of its certificate
+#   aap_vm_fqdn            AAP name, the name of its certificate and vhost
+#   aap_vm_snapshot_names  dict of the AAP VM's snapshot names
 #   aap_inventory_name     AAP inventory the VM's host is recorded in
 
 - name: Check the deployment versions to retire
@@ -87,12 +90,28 @@
           {{ counter_live | join(', ') }}. Nothing was changed.
 
 # A failure here must stop the whole run before DNS and the live list change.
-- name: Remove the AAP VMs and certificates of the retired versions
+- name: Remove the AAP VMs, vhosts and certificates of the retired versions
   hosts: autodeploy_target
   become: true
   gather_facts: false
   any_errors_fatal: true
+  handlers:
+    - name: Reload nginx
+      ansible.builtin.systemd_service:
+        name: nginx
+        state: reloaded
   tasks:
+    # libvirt refuses to undefine a VM that still has snapshots.
+    # community.libvirt has no snapshot module; the metadata file exists
+    # as long as the snapshot does.
+    - name: Delete the AAP VM's snapshots
+      ansible.builtin.command:
+        argv: [virsh, snapshot-delete, --domain, "{{ aap_vm_name }}", --snapshotname, "{{ item.1 }}"]
+        removes: "/var/lib/libvirt/qemu/snapshot/{{ aap_vm_name }}/{{ item.1 }}.xml"
+      loop: "{{ hostvars['localhost'].retire_labels | product(aap_vm_snapshot_names.values()) | list }}"
+      vars:
+        autodeploy_deployment_version: "{{ item.0 }}"
+
     # The CaC names are templates on the deployment version; each item sets it.
     - name: Stop and undefine the AAP VM
       community.libvirt.virt_install:
@@ -109,6 +128,15 @@
       loop: "{{ hostvars['localhost'].retire_labels }}"
       vars:
         autodeploy_deployment_version: "{{ item }}"
+
+    - name: Remove the AAP vhost
+      ansible.builtin.file:
+        path: "/etc/nginx/conf.d/{{ aap_vm_fqdn }}.conf"
+        state: absent
+      loop: "{{ hostvars['localhost'].retire_labels }}"
+      vars:
+        autodeploy_deployment_version: "{{ item }}"
+      notify: Reload nginx
 
     # certbot keeps a certificate in three directories plus its renewal
     # configuration; its own delete removes all of them.

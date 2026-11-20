@@ -1,0 +1,37 @@
+---
+# Download the private repository into a scratch directory on the machine
+# that runs the play (the execution environment); registers cac_scratch.
+# Shared by aap-cac-apply.yml and 11-aap-install.yml.
+#
+# Required variables:
+#   cac_repository         private repository as owner/name
+#   cac_repository_ref     branch, tag or commit, e.g. main
+#   counter_git_username   GitHub account and token that can read it, from
+#   counter_git_token      the credential "GitHub AutoDeploy CaC Secrets-NGNG"
+
+- name: Create a scratch directory for the private repository
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: .cac
+  register: cac_scratch
+
+- name: Download the private repository at the requested ref
+  ansible.builtin.get_url:
+    url: "https://api.github.com/repos/{{ cac_repository }}/tarball/{{ cac_repository_ref }}"
+    dest: "{{ cac_scratch.path }}/repository.tar.gz"
+    url_username: "{{ counter_git_username }}"
+    url_password: "{{ counter_git_token }}"
+    force_basic_auth: true
+    headers:
+      Accept: application/vnd.github+json
+      X-GitHub-Api-Version: "2022-11-28"
+    mode: "0600"
+    timeout: 60
+
+- name: Unpack the private repository
+  ansible.builtin.unarchive:
+    src: "{{ cac_scratch.path }}/repository.tar.gz"
+    dest: "{{ cac_scratch.path }}"
+    remote_src: true
+    extra_opts:
+      - --strip-components=1

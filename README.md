@@ -61,7 +61,8 @@ Refactored, reviewed and committed:
 | Image download | 68 | 9 |
 | AAP VM create | about 147 | 8 |
 | AAP DNS and certificate | about 50 | 2 (DNS reuses the host DNS stage) |
-| Instance retire | 69 | 10 |
+| AAP install | 49 | 28 (18 + snapshot and download task files) + 3 handlers |
+| Instance retire | 69 | 12 + 1 handler |
 
 The reinstall stage removes `ansible_port` from the target's AAP inventory
 host before the erase, so later jobs reach the rebuilt host on port 22, and
@@ -140,8 +141,9 @@ instance owns is found by the version in its name, without a separate
 registry. It deletes every A record in the zone that has the version as a
 whole label (`host.v24`, `aap.v24`, never `host.v240`), then removes the
 versions from the live list with the same SHA-guarded write as the deployment
-version stage. Before DNS it stops, undefines and deletes each version's AAP
-VM and disk on the hypervisor (names from the CaC templates) and deletes the
+version stage. Before DNS it deletes each version's AAP VM snapshots, stops,
+undefines and deletes the AAP VM and disk on the hypervisor (names from the
+CaC templates), removes the AAP vhost and deletes the
 certificate of the AAP name with `certbot delete`, then removes the VM's host
 from the AAP inventory. VMs, hosts and DNS go before the list, so a failed delete leaves the version live and
 a rerun finds its names again. After a reinstall the previous version stays
@@ -206,7 +208,31 @@ made libvirt depend on that firewall, which the new design does not want.
 The old `aap.yml` dispatcher, which every job template ran first, is dropped
 as well: each job template points directly at its own playbook.
 
-Not yet started: the AAP installation and the stages after it. Nothing here has run
+The installation stage (`11-aap-install.yml`) takes the deployment version as
+an extra variable and targets the VM's inventory host
+(`aap*-<version>`) and the hypervisor group. It registers the VM with `rhc`
+(the activation key of the conversion stage, no AAP repository), takes a cold
+libvirt snapshot (shut down, `virsh snapshot-create-as`, start, wait for SSH;
+names from `aap_vm_snapshot_names`), adds the shared AutoDeploy CA to the
+VM's trust store, grows the root partition and XFS, resolves the AAP name to
+the VM in `/etc/hosts` and installs `ansible-core`. It downloads the private
+repository with the GitHub credential (task file shared with the CaC apply
+job), decrypts the installer secrets (`vaulted_aap_installer`) with the vault
+credential, renders the installer inventory (growth topology, bundle install,
+MCP server, `ca_tls_cert`/`ca_tls_key` from the shared CA, no hub seeding)
+into the bundle directory and runs the containerized installer as
+`aap_install_user`. A Gateway ping on the VM against the shared CA proves the
+install. A second cold snapshot follows, then the hypervisor gets the AAP
+vhost (Let's Encrypt certificate, upstream verified with the shared CA, login
+rate limit; `nginx -t` before the reload), and a ping of the public URL proves
+the path end to end. The RHEL update of the VM is not part of it yet:
+`05-rhel-update.yml` targets `autodeploy_target` only.
+
+The web edge's port-80 catch-all serves `/.well-known/acme-challenge/` from
+the certbot webroot for every name and answers everything else with 444, so
+Let's Encrypt issuance and renewal need no per-name port-80 server.
+
+Not yet started: the stages after the AAP installation. Nothing here has run
 against a real server yet. The old repositories remain the working implementation until a
 stage has been proven here.
 
@@ -245,6 +271,8 @@ assertions are read-only and safe to run at any time.
     playbooks/host/templates/ file templates, structure only (values come from the
                               private repo's CaC)
     playbooks/host/files/     static files (public, no secrets)
+    playbooks/tasks/          task files imported by more than one play
+    playbooks/templates/      file templates of the AAP stages
     collections/  collection requirements
 
 ## Applying the CaC
