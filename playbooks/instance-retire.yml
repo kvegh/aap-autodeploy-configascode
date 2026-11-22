@@ -6,7 +6,7 @@
 # template, started by hand with the versions in the survey.
 #
 # Everything an instance owns is found by the version in its name; there is no
-# separate registry. This version cleans five things:
+# separate registry. This version cleans six things:
 #   1. the AAP VM's snapshots, the VM on the hypervisor (stopped and
 #      undefined) and its disk
 #   2. the AAP vhost and the Let's Encrypt certificate of the AAP name on the
@@ -14,7 +14,9 @@
 #   3. the AAP VM's host in the AAP inventory
 #   4. every A record in the zone with the version as a whole label, for
 #      example host.v24 and aap.v24, but never host.v240
-#   5. the version in the live list of the deployment counter
+#   5. the AAP VM's Gateway tokens in the private repository's vault; the
+#      tokens themselves go with the destroyed AAP, so they are not revoked
+#   6. the version in the live list of the deployment counter
 # The live list is written last, so a failure leaves the version live and a
 # rerun finds everything again.
 #
@@ -25,7 +27,8 @@
 #
 # Required variables, supplied by the job template, its survey, the CaC
 # inventory, the Git write credential, the DNS credential and the machine
-# credential of the hypervisor, and the standard Red Hat Ansible Automation
+# credential of the hypervisor, the vault credential of the private
+# repository, and the standard Red Hat Ansible Automation
 # Platform credential, which hands the controller URL and login to
 # ansible.controller as environment variables:
 #   retire_versions        survey text, versions separated by commas or spaces
@@ -33,6 +36,10 @@
 #   counter_file_path      counter file in that repository, from the CaC inventory
 #   counter_git_username   GitHub account that owns the token
 #   counter_git_token      token with contents write access to that repository
+#   cac_repository, cac_repository_ref, cac_usecase
+#                          private repository, ref (also the branch the vault
+#                          is written to) and use case whose env_variables.yml
+#                          is the vault file
 #   dns_godaddy_token      GoDaddy API token for the zone
 #   dns_zone               DNS zone, for example example.com
 #   aap_vm_name            AAP VM name, a template on autodeploy_deployment_version
@@ -40,6 +47,8 @@
 #   aap_vm_fqdn            AAP name, the name of its certificate and vhost
 #   aap_vm_snapshot_names  dict of the AAP VM's snapshot names
 #   aap_inventory_name     AAP inventory the VM's host is recorded in
+# From the vault: vaulted_cac_vault_password (to write the vault) and
+# vaulted_aap_instance_tokens (per AAP VM name).
 
 - name: Check the deployment versions to retire
   hosts: localhost
@@ -148,7 +157,7 @@
       vars:
         autodeploy_deployment_version: "{{ item }}"
 
-- name: Remove the inventory hosts, DNS names and live list entries of the retired versions
+- name: Remove the inventory hosts, DNS names, vault tokens and live list entries of the retired versions
   hosts: localhost
   connection: local
   gather_facts: false
@@ -157,6 +166,11 @@
     counter_api_url: "https://api.github.com/repos/{{ counter_repository }}/contents/{{ counter_file_path }}"
     counter_live_pattern: '(?m)^autodeploy_deployment_instances_live: \[[0-9, ]*\]$'
     dns_api_base: https://api.godaddy.com
+    retire_vault_path: "usecases/{{ cac_usecase }}/env_variables.yml"
+    # Vault keys are AAP VM names; the version is a whole part of the name.
+    retire_token_names: >-
+      {{ vaulted_aap_instance_tokens | default({}) | dict2items | map(attribute='key')
+      | select('search', '(?i)(^|[.-])(' ~ retire_labels | join('|') ~ ')([.-]|$)') | list }}
   tasks:
     # Before DNS and the live list, so a failure leaves the version live.
     - name: Remove the AAP VM's host from the AAP inventory
@@ -202,6 +216,58 @@
       loop_control:
         label: "{{ item.name }}"
       changed_when: true
+
+    - name: Download the private repository
+      ansible.builtin.import_tasks: tasks/private-repository-download.yml
+
+    - name: Load the vault values
+      ansible.builtin.include_vars:
+        file: "{{ cac_scratch.path }}/{{ retire_vault_path }}"
+      no_log: true
+
+    - name: Remove the retired AAPs' tokens from the vault
+      when: retire_token_names | length > 0
+      block:
+        - name: Read the vault file and its blob SHA
+          ansible.builtin.uri:
+            url: "https://api.github.com/repos/{{ cac_repository }}/contents/{{ retire_vault_path }}?ref={{ cac_repository_ref }}"
+            url_username: "{{ counter_git_username }}"
+            url_password: "{{ counter_git_token }}"
+            force_basic_auth: true
+            headers:
+              Accept: application/vnd.github+json
+              X-GitHub-Api-Version: "2022-11-28"
+            timeout: 30
+          register: retire_vault_file
+
+        # Same rewrite as the base configuration job's token write: decrypt,
+        # replace the token dict, encrypt again; comments in the file are lost.
+        - name: Write the vault file without their tokens against the read blob SHA
+          ansible.builtin.uri:
+            url: "https://api.github.com/repos/{{ cac_repository }}/contents/{{ retire_vault_path }}"
+            method: PUT
+            url_username: "{{ counter_git_username }}"
+            url_password: "{{ counter_git_token }}"
+            force_basic_auth: true
+            headers:
+              Accept: application/vnd.github+json
+              X-GitHub-Api-Version: "2022-11-28"
+            body_format: json
+            body:
+              message: "Remove the tokens of {{ retire_token_names | join(', ') }}"
+              branch: "{{ cac_repository_ref }}"
+              sha: "{{ retire_vault_file.json.sha }}"
+              content: >-
+                {{ retire_vault_file.json.content | b64decode
+                | ansible.builtin.unvault(vaulted_cac_vault_password, vault_id='cac')
+                | from_yaml
+                | combine({'vaulted_aap_instance_tokens': vaulted_aap_instance_tokens
+                           | dict2items | rejectattr('key', 'in', retire_token_names) | items2dict})
+                | to_nice_yaml
+                | ansible.builtin.vault(vaulted_cac_vault_password, vault_id='cac')
+                | b64encode }}
+            timeout: 30
+          changed_when: true
 
     - name: Write the live list without the retired versions against the read blob SHA
       ansible.builtin.uri:

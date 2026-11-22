@@ -19,7 +19,7 @@
 # scratch directory, which goes away with the job.
 #
 # Rerunnable: tokens are created once per AAP (the vault entry is the record);
-# the rest converges. Retiring an instance does not yet remove its vault entry.
+# the rest converges. Retiring an instance removes its vault entry.
 #
 # Credentials: GitHub AutoDeploy CaC Secrets-NGNG (counter_git_username,
 # counter_git_token; read and write) and the vault credential of the private

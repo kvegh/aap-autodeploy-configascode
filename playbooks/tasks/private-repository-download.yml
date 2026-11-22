@@ -1,7 +1,8 @@
 ---
 # Download the private repository into a scratch directory on the machine
 # that runs the play (the execution environment); registers cac_scratch.
-# Shared by aap-cac-apply.yml, 11-aap-install.yml and 12-aap-base-config.yml.
+# Shared by aap-cac-apply.yml, 11-aap-install.yml, 12-aap-base-config.yml and
+# instance-retire.yml.
 #
 # Required variables:
 #   cac_repository         private repository as owner/name
