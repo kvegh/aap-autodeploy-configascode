@@ -1,5 +1,33 @@
 # Design decisions history
 
+## Host names without the deployment version — 2026-11-22
+
+Decided by the user on 19/20 November 2026 (CET; bead bead-wd-0gnz.41),
+implemented 22 November 2026, 17:07 CET. The hypervisor is named from its DNS
+label alone (`<label>`, `<label>.<zone>`) and the hypervisor workflow no
+longer runs the deployment version stage; the AAP deploy workflow draws the
+version. The change itself is in the private CaC; here only the comments of
+the host DNS and base stages and the README. Commit `1cec12d` (v0.0.53).
+
+## Retire job: vault tokens and inventory hosts — 2026-11-22
+
+22 November 2026, 17:05 CET, user authorization (retire of v29).
+- Known gap: the retire job left the instance's Gateway tokens
+  (`vaulted_aap_instance_tokens['aap27-vXY']`) in the private vault. Fix: it
+  loads the vault, drops the keys whose AAP VM name carries a retired version
+  and writes the vault back re-encrypted against the read blob SHA (same
+  pattern as the base configuration job), before the live list. The tokens
+  die with the destroyed AAP and are not revoked. Commit `2d77a60`
+  (v0.0.51); the job template needs the vault credential and the private
+  repository variables (private `89fcc1b`).
+- Cause (job 5315 of JT 205): AAP refuses to delete a host while any job runs
+  on its inventory, and the retire job itself runs on that inventory. Fix:
+  the host is removed through the inventory's host list (documented
+  `disassociate`, which deletes the host); hosts are found by the version as
+  a whole part of their name, like the DNS records. Commit `8ca3f85`
+  (v0.0.52).
+- Result: job 5318 of JT 205 successful (17:04-17:05 CET).
+
 ## Platform token login through module_defaults — 2026-11-20
 
 20 November 2026, 15:28 CET, fix along the way (v29 step run, job 5279 of
