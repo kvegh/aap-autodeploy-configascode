@@ -305,11 +305,12 @@ repository), loads the repository's vault (`env_variables.yml` at its root),
 reads its own section with `filetree_read` and applies only its own object
 types with `dispatch`, logged in to the target with the target's MCP token.
 Every use case -secrets repository has the same three sections: `aap-infra/`
-(credential types, credentials, inventories, hosts, groups, projects),
-`aap-content/` (hub collections, EEs) and `aap-config/` (job templates with
+(labels, credential types, credentials, inventories, hosts, groups,
+projects), `aap-content/` (hub collections, EEs) and `aap-config/` (job templates with
 surveys, workflows). Content syncs run explicitly (no 50 s limit); config
 updates the projects its job templates use first. Use cases are deployed,
-never launched.
+never launched. Deployed so far: AIOps self-healing, RHEL sniper patching and
+CCNG to v31 (22 November 2026).
 
 The web edge's port-80 catch-all serves `/.well-known/acme-challenge/` from
 the certbot webroot for every name and answers everything else with 444, so

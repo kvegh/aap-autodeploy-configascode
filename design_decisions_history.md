@@ -1,5 +1,23 @@
 # Design decisions history
 
+## First use cases deployed to v31: AIOps, sniper, CCNG — 2026-11-22
+
+User decisions (22 November 2026, CET): convert AIOps self-healing, RHEL
+sniper patching and CCNG into the three sections and deploy them (never run)
+to v31 with "Deploy UseCases to AAP"; fix what breaks, smallest fix.
+
+Agent choices: the infra part also applies labels (the captured job templates
+reference them), `1b46e5e` (v0.1.3, 22:33 CET). Private: GitHub read tokens
+`90b736f`; the registry credential uses the admin password `fa8751c` (the new
+AAP's registry refuses Gateway tokens), applied by Job 5396 — JT 213
+AutoDeploy-NGNG 70 AAP base content config (v31, successful). Use case repos:
+AIOps `1febc85`/`9f2e291`, sniper `5de35b1`/`cfff7c7`, CCNG `426e565`.
+
+Runs on v31 (JT 11 Deploy UseCases to AAP): Job 3 (CCNG) failed on the EE
+pull; Job 5 (CCNG) successful; Job 12 (sniper, AIOps) failed on four surveys
+and the AIOps project wait; Job 23 (sniper, AIOps) successful. Nothing of the
+use cases launched. Checks: ansible-lint production strict 0/0 on
+`usecase-aap-infra.yml`.
 ## Tree sections aap-infra/aap-content/aap-config, retire v30, v31 from bare metal — 2026-11-22
 
 User decisions (22 November 2026, about 20:40 CET, relayed during the v31
