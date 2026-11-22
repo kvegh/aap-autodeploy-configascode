@@ -1,5 +1,54 @@
 # Design decisions history
 
+## Tree sections aap-infra/aap-content/aap-config, retire v30, v31 from bare metal — 2026-11-22
+
+User decisions (22 November 2026, about 20:40 CET, relayed during the v31
+run; they override the plan's `aap-platform/` + `aap-base-content/`):
+- Private repository: `aap-config/` = AAP platform configuration (part 6),
+  `aap-content/` = AAP content incl. the use case deployer (part 7),
+  `aap-infra/` = hypervisor and OS configuration (parts 1–4); the new AAP's
+  trees stay outside `usecases/autodeploy/`.
+- Every use case -secrets repository has the same three sections
+  `aap-infra/`, `aap-content/`, `aap-config/` instead of one `aap/` tree;
+  `usecase-aap-infra/-content/-config.yml` read their own section.
+
+Agent choices:
+- `aap-content/base/` and `aap-content/usecase-deployer/` as two trees: one
+  recursive `filetree_read` of `aap-content/` would create the deployer
+  project before its collections are synced. JT extra vars
+  `aap_config_cac_dir` (60) and `aap_content_cac_dir` (70) follow the names.
+- No `aap-infra/` for the base (conflict reported): the configuration of
+  parts 1–4 is the variables of Inventory 10, which JT 204 applies from
+  `usecases/autodeploy/`; nothing of it lives in a directory of its own.
+- Use case repositories: one vault `env_variables.yml` at the root for all
+  three sections; the catalog drops `path`. The config node updates the
+  projects its job templates use (the projects now come from `aap-infra/`).
+Commits: `c015258` (v0.1.1), private `d86269b` (v0.1.1); Project 193 synced
+(5366), JT 210 and 213 extra vars patched.
+
+Retire v30: Job 5354 — JT 205 AutoDeploy-NGNG Instance retire, 19:52–19:53
+CET (64 s), successful without changes; VM, snapshots, vhost, certificate,
+DNS, inventory host, vault tokens and live list entry verified gone.
+
+v31 from bare metal (test hypervisor only, target checked in Inventory 10
+before the erase):
+- Workflow job 5357 — AutoDeploy-NGNG Hypervisor deploy, 19:54–20:53 CET
+  (58m56s), successful, no fixes.
+- Workflow job 5367 — AutoDeploy-NGNG AAP deploy (empty version, drew v31),
+  20:55–21:51 CET, failed at 70 (job 5376): the deployer project's first
+  sync on the fresh AAP took 13m55s (confirmed in v31's database), the CoP
+  wait 750 s. Fix `836179b` (v0.1.2): poll every 30 s (1500 s). Rerun of JT
+  213 alone (job 5381, v31) successful in 4m33s.
+- Workflow job 5383 — AutoDeploy-NGNG AAP deploy (`deployment_version`
+  v31), 22:00–22:15 CET (15m45s), successful: final proof.
+- Verified read-only: hypervisor host name as configured, DNS of both names to the
+  hypervisor, Let's Encrypt certificate (YE1, to 2027-02-20), public ping
+  200, subscription Premium attached, default EE `ee-proj-aap-cac` (id 6),
+  hub remotes rh-certified/validated/community, the 3 generic JTs, 7 use
+  case workflows and "Deploy UseCases to AAP" with its two survey questions
+  (target choices [aap27-v31]); live list [25, 31]. The deployer was not
+  launched.
+
 ## Restructure into seven parts (v0.1.0) — 2026-11-22
 
 Planned 22 November 2026 18:28 CET (`restructure-plan.md`, bead
@@ -20,7 +69,7 @@ User decisions:
 - The use case deployer stays in this repository and is the last step of
   part 7, after the hub content and the default EE; it logs in with the
   existing MCP token (credential "AAP API-NGNG"), no third token.
-- No workflow labels (wf1/wf2) in code, CaC or this repository.
+- No numbered workflow labels in code, CaC or this repository.
 
 Agent choices:
 - Split at the existing play boundaries: 40 = registration, update (imports
