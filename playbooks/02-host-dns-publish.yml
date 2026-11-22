@@ -1,18 +1,17 @@
 ---
-# Publish the public DNS name of the rebuilt host, for example
-# host.v26.<zone>, and wait until public DNS resolves it.
+# Publish a public DNS name on the rebuilt host's address, for example
+# host.<zone> or, through its own job template, aap27.vXY.<zone>, and wait
+# until public DNS resolves it.
 #
 # This playbook only creates or corrects the new name. It never deletes a
 # name: older versions may still belong to live instances.
 #
-# Required variables, from the workflow, the DNS credential and the CaC
-# inventory:
-#   autodeploy_deployment_version   published by the deployment version stage;
-#                                   the host names below are built from it
+# Required variables, from the DNS credential, the CaC inventory and the job
+# template:
 #   dns_godaddy_token               GoDaddy API token for the zone
 #   dns_zone                        DNS zone, for example example.com
 #   host_dns_record                 host name relative to the zone, a job-time
-#                                   template in the CaC, for example host.v26
+#                                   template in the CaC, for example host
 #   host_fqdn                       full host name, a job-time template in the CaC
 #   dns_host_ipv4                   public IPv4 of the rebuilt host
 #   dns_ttl                         TTL of the A record in seconds

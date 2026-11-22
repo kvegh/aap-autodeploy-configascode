@@ -8,8 +8,7 @@
 #
 # Required variables, from the CaC inventory unless noted:
 #   host_short_name, host_fqdn      host names, job-time templates in the CaC
-#                                   built from the deployment version (from the
-#                                   deployment version stage) and the DNS labels
+#                                   built from the DNS label and zone
 #   dns_host_ipv4                   as for the host DNS stage
 #   host_timezone                   e.g. Europe/Vienna
 #   host_base_packages              packages to install

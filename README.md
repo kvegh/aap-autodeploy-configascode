@@ -75,7 +75,7 @@ assigned version added to the list of live instances, through the GitHub
 contents API. A launch may instead name a live version in
 `deployment_version` (for example to rerun a deployment); it is published
 as it is and the counter is not changed. The host DNS stage creates or corrects the name
-`host_fqdn` (in the CaC: `<label>.vXY.<zone>`) at GoDaddy and waits until public DNS returns the host
+`host_fqdn` (in the CaC: `<label>.<zone>`, without the deployment version) at GoDaddy and waits until public DNS returns the host
 address. It never deletes names: older versions may still be live instances;
 the instance retire job removes them.
 
