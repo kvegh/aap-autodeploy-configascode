@@ -1,5 +1,64 @@
 # Design decisions history
 
+## Restructure into seven parts (v0.1.0) — 2026-11-22
+
+Planned 22 November 2026 18:28 CET (`restructure-plan.md`, bead
+bead-wd-0gnz.44), implemented 19:38–19:50 CET. Commit `04e964d` (v0.1.0);
+private CaC `7c80baa` (v0.1.0). Live AAP changed only by single-object API
+calls, no CaC apply.
+
+User decisions:
+- Seven parts (2026-11-20): 1 hypervisor install, 2 hypervisor OS config,
+  3 AAP VM deploy, 4 AAP VM OS config, 5 AAP software deployment, 6 AAP
+  platform config, 7 AAP base content config; parts 5–7 AAP-specific.
+- Naming PS = part + order: playbooks `PS-<subject>-<action>.yml`, job
+  templates `AutoDeploy-NGNG PS <what>`; Workflow 203 becomes
+  "AutoDeploy-NGNG Hypervisor deploy", 211 keeps "AutoDeploy-NGNG AAP
+  deploy"; `host/` → `hypervisor/`; private `aap-base/` → `aap-platform/` +
+  `aap-base-content/`; 11 → 40 + 52, 12 → 60 + 70.
+- Parts 3–4 use generic `vm_*` variables instead of `aap_vm_*`.
+- The use case deployer stays in this repository and is the last step of
+  part 7, after the hub content and the default EE; it logs in with the
+  existing MCP token (credential "AAP API-NGNG"), no third token.
+- No workflow labels (wf1/wf2) in code, CaC or this repository.
+
+Agent choices:
+- Split at the existing play boundaries: 40 = registration, update (imports
+  `14-rhel-update.yml`), snapshot before the install, CA trust, root
+  filesystem, `/etc/hosts`, packages (no vault; credentials machine and
+  subscription); 52 = download, installer, snapshot after, vhost, public
+  ping (credentials machine, GitHub, vault; subscription dropped).
+- 60 = tokens into the vault, subscription, platform tree (credential type,
+  vault, Git and own-AAP credentials) with `filetree_read` + `dispatch`;
+  70 = base content tree, EE sync, global default EE, collection syncs,
+  deployer tree. 70 reads the tokens from the vault 60 wrote
+  (`aap_base_tokens` keeps its name, both trees use it).
+- `vm_*` renamed everywhere, also the names parts 5–7 read (`vm_name`,
+  `vm_fqdn`) and the task file (`tasks/vm-cold-snapshot.yml`, variable
+  `vm_snapshot`). The VM plays keep the host pattern
+  `aap*-<deployment version>`: a play's `hosts` cannot read inventory
+  variables.
+- `aap-cac-apply.yml` and JT 204 "AutoDeploy-NGNG CaC apply" keep their
+  names: the plan's rename to `usecase-deploy.yml` is taken by the deployer.
+- Workflow node identifiers follow the job template numbers
+  (`10_provider_reinstall` … `70_aap_base_content_config`).
+- Workflow labels in this history replaced by "hypervisor workflow" / "AAP
+  deployment" (old job template names quoted generically).
+
+Live (production AAP, 19:42–19:47 CET): Project 193 synced (update 5352);
+JTs 194–202, 195, 206–210 renamed and repointed; 207 extra vars `vm_fqdn`;
+209 description, Credential 65 removed; 210 description, extra vars
+`aap_platform_cac_dir: aap-platform`, timeout 1800; new JT 212 —
+AutoDeploy-NGNG 40 AAP VM OS config (Credentials 62, 65) and JT 213 —
+AutoDeploy-NGNG 70 AAP base content config (61, 19); Workflow 203 renamed;
+Workflow 211 description, new nodes 116 (40; 111 → 116 → 112) and 117 (70;
+115 → 117); all node identifiers renamed; Inventory 10: `vm_*` added, then
+`aap_vm_*` removed (CaC compared equal to live).
+
+Checks: ansible-lint production strict 0/0 on all 32 playbooks and task
+files (local collection caches, temporary lint config with the deployment
+version as extra variable, removed after the run).
+
 ## Generic use case deployer framework — 2026-11-22
 
 Designed by the user on 22 November 2026 (CET; bead bead-wd-0gnz.39),
