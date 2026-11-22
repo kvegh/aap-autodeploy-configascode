@@ -39,6 +39,9 @@
     aap_validate_certs: true
     aap_configuration_secure_logging: true
     aap_configuration_async_dir: /tmp/.ansible_async  # empty default broke async_status ("could not find job") on ansible-core 2.20
+    # A project sync that installs collections takes minutes; the CoP wait
+    # (50 polls) at 15 s per poll covers 750 s.
+    controller_configuration_projects_async_delay: 15
     aap_configuration_dispatcher_roles:
       - {role: controller_credential_types, var: controller_credential_types, tags: credential_types}
       - {role: controller_credentials, var: controller_credentials, tags: credentials}
