@@ -270,14 +270,14 @@ with the vault password kept in the vault itself, the AAP's key added under
 `vaulted_aap_instance_tokens`, encrypted again, sent with the blob SHA. It
 attaches the subscription with the CoP role `controller_license` (Red Hat
 service account, filter from the CaC), then reads the private repository's
-platform tree (`aap_platform_cac_dir`, outside `usecases/` so the CaC apply
+AAP config tree (`aap_config_cac_dir`, `aap-config/`, outside `usecases/` so the CaC apply
 job never applies it to the deploying AAP) with `filetree_read` and applies it
 with `dispatch`: the Git write credential type, the vault and Git write
 credentials and the AAP's own API credential with its MCP token.
 
 The base content stage (`70-aap-base-content-config.yml`) logs in the same
 way, takes the AAP's tokens from the vault and applies the base content tree
-(`aap_base_content_cac_dir`): collection remotes rh-certified, validated and community with
+(`aap_content_cac_dir`, `aap-content/base/`): collection remotes rh-certified, validated and community with
 their repositories and distributions (no sync), the deploying AAP's hub as an
 anonymous container registry and the repository of the default EE, three
 Galaxy and one registry credential on the AAP's own hub, the default EE pinned
@@ -286,7 +286,8 @@ stops waiting after about 50 s), sets `DEFAULT_EXECUTION_ENVIRONMENT` and
 syncs the three collection repositories, whose remotes carry requirements
 files with exactly the collections the deployer project needs
 (`collections/requirements.yml` plus dependencies). Last, it reads the use
-case deployer tree (`aap_deployer_cac_dir`, a sibling of the content tree) and
+case deployer tree (`aap_deployer_cac_dir`, `aap-content/usecase-deployer/`, a
+sibling of the base content tree) and
 applies only its inventory, project, job templates and workflows; the
 project's first sync installs the collections from the new hub (about 6 min).
 Route timeouts keep their defaults.
@@ -300,11 +301,15 @@ workflow has the same three generic nodes, infra → content → config
 only the workflow variable `usecase_name` differs. Each node downloads the
 private repository (vault and use case catalog), then the use case's -secrets
 repository with the GitHub token the catalog names (one vault variable per
-repository), loads the tree's own vault, reads the tree with `filetree_read`
-and applies only its own object types with `dispatch`, logged in to the target
-with the target's MCP token. Content syncs run explicitly (no 50 s limit);
-config updates the tree's projects before the job templates. Use cases are
-deployed, never launched.
+repository), loads the repository's vault (`env_variables.yml` at its root),
+reads its own section with `filetree_read` and applies only its own object
+types with `dispatch`, logged in to the target with the target's MCP token.
+Every use case -secrets repository has the same three sections: `aap-infra/`
+(credential types, credentials, inventories, hosts, groups, projects),
+`aap-content/` (hub collections, EEs) and `aap-config/` (job templates with
+surveys, workflows). Content syncs run explicitly (no 50 s limit); config
+updates the projects its job templates use first. Use cases are deployed,
+never launched.
 
 The web edge's port-80 catch-all serves `/.well-known/acme-challenge/` from
 the certbot webroot for every name and answers everything else with 444, so

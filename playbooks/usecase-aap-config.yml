@@ -1,12 +1,13 @@
 ---
 # Apply the AAP configuration of one use case to the target AAP: job
-# templates (with their surveys) and workflows from the use case's CaC tree.
+# templates (with their surveys) and workflows from the use case's aap-config/
+# tree.
 # Third node of the use case's workflow (infra, content, config); the same
 # playbook serves every use case. Nothing is launched.
 #
-# The tree's projects are updated first: they were created before their
-# collections were in the hub, and a job template needs its playbook in a
-# synced project.
+# The projects the job templates use are updated first: the infra part
+# created them (aap-infra/) before their collections were in the hub, and a
+# job template needs its playbook in a synced project.
 #
 # Login, credentials and required variables: as usecase-aap-infra.yml.
 
@@ -17,7 +18,7 @@
   become: false
   vars:
     usecase: "{{ usecase_catalog[usecase_name] }}"
-    usecase_tree: "{{ usecase_scratch.path }}/{{ usecase.path }}"
+    usecase_tree: "{{ usecase_scratch.path }}/aap-config"
     dir_orgs_vars: "{{ usecase_tree }}"
     controller_configuration_filetree_read_layout: create
     aap_hostname: "https://{{ usecase_target_aap_fqdn }}"
@@ -38,15 +39,11 @@
     - name: Read the use case tree
       ansible.builtin.import_tasks: tasks/usecase-tree-read.yml
 
-    - name: Update the use case's projects
+    - name: Update the projects the use case's job templates use
       ansible.controller.project_update:
-        name: "{{ item.name }}"
-        organization: "{{ item.organization | default(omit) }}"
+        name: "{{ item }}"
         wait: true
-        timeout: "{{ item.timeout | default(omit) }}"
-      loop: "{{ controller_projects | default([]) }}"
-      loop_control:
-        label: "{{ item.name }}"
+      loop: "{{ controller_templates | default([]) | map(attribute='project') | unique }}"
 
     - name: Apply the use case's AAP configuration
       ansible.builtin.include_role:

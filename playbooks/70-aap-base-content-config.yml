@@ -34,7 +34,7 @@
 #   cac_repository, cac_repository_ref, cac_usecase
 #                                   private repository, ref and use case whose
 #                                   env_variables.yml is the vault file
-#   aap_base_content_cac_dir        base content CaC tree in the private
+#   aap_content_cac_dir             base content tree (part 7) in the private
 #                                   repository
 #   aap_deployer_cac_dir            use case deployer tree in the private
 #                                   repository
@@ -59,7 +59,7 @@
     aap_configuration_secure_logging: true
     aap_configuration_async_dir: /tmp/.ansible_async  # empty default broke async_status ("could not find job") on ansible-core 2.20
     controller_configuration_filetree_read_layout: create
-    dir_orgs_vars: "{{ cac_scratch.path }}/{{ aap_base_content_cac_dir }}"
+    dir_orgs_vars: "{{ cac_scratch.path }}/{{ aap_content_cac_dir }}"
     aap_base_tokens: "{{ vaulted_aap_instance_tokens[vm_name] }}"
   module_defaults:
     group/ansible.controller.controller: &aap_login

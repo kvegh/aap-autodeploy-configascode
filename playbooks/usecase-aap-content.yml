@@ -1,7 +1,7 @@
 ---
 # Apply the AAP content of one use case to the target AAP: hub collection
 # remotes and repositories, EE registries and repositories, and EEs from the
-# use case's CaC tree; then sync the collection and EE repositories. Second
+# use case's aap-content/ tree; then sync the collection and EE repositories. Second
 # node of the use case's workflow (infra, content, config); the same
 # playbook serves every use case.
 #
@@ -19,7 +19,7 @@
   become: false
   vars:
     usecase: "{{ usecase_catalog[usecase_name] }}"
-    usecase_tree: "{{ usecase_scratch.path }}/{{ usecase.path }}"
+    usecase_tree: "{{ usecase_scratch.path }}/aap-content"
     dir_orgs_vars: "{{ usecase_tree }}"
     controller_configuration_filetree_read_layout: create
     aap_hostname: "https://{{ usecase_target_aap_fqdn }}"

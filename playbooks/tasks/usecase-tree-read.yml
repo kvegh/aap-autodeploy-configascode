@@ -4,11 +4,12 @@
 #
 # The private repository gives the vault (the target AAP's token) and the use
 # case catalog; the catalog entry gives the use case's -secrets repository,
-# its ref, the tree directory in it and the vault variable with the GitHub
-# read token for it (a name, so other use cases' tokens may be missing). The
-# tree is a CoP filetree with its own vault file env_variables.yml at its
-# root. Both downloads stay in the execution environment's scratch
-# directories, which go away with the job.
+# its ref and the vault variable with the GitHub read token for it (a name, so
+# other use cases' tokens may be missing). Every use case repository has the
+# same layout: its vault file env_variables.yml at the root and three CoP
+# filetrees next to it, aap-infra/, aap-content/ and aap-config/; the calling
+# playbook names its own tree in usecase_tree. Both downloads stay in the
+# execution environment's scratch directories, which go away with the job.
 #
 # Required variables, from the job template, the workflow and the deployer:
 #   cac_repository, cac_repository_ref, cac_usecase
@@ -18,7 +19,8 @@
 #   counter_git_token      repository, from its credential
 #   usecase_catalog_file   catalog file in the private repository
 #   usecase_name           use case, a key of the catalog
-# The playbook defines usecase (the catalog entry) and usecase_tree.
+# The playbook defines usecase (the catalog entry) and usecase_tree (its
+# section of the downloaded repository).
 
 - name: Download the private repository
   ansible.builtin.import_tasks: private-repository-download.yml
@@ -61,7 +63,7 @@
 
 - name: Load the vault values of the use case
   ansible.builtin.include_vars:
-    file: "{{ usecase_tree }}/env_variables.yml"
+    file: "{{ usecase_scratch.path }}/env_variables.yml"
   no_log: true
 
 - name: Read the use case tree

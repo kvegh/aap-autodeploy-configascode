@@ -29,7 +29,7 @@
 #                                   private repository, ref (also the branch
 #                                   the vault is written to) and use case whose
 #                                   env_variables.yml is the vault file
-#   aap_platform_cac_dir            platform CaC tree in the private repository
+#   aap_config_cac_dir              AAP config tree (part 6) in the private repository
 #   vm_name, vm_fqdn                AAP VM name (the vault key) and AAP name
 #   aap_base_user                   login and token owner; its password is the
 #                                   installer's admin password
@@ -57,7 +57,7 @@
     aap_configuration_secure_logging: true
     aap_configuration_async_dir: /tmp/.ansible_async  # empty default broke async_status ("could not find job") on ansible-core 2.20
     controller_configuration_filetree_read_layout: create
-    dir_orgs_vars: "{{ cac_scratch.path }}/{{ aap_platform_cac_dir }}"
+    dir_orgs_vars: "{{ cac_scratch.path }}/{{ aap_config_cac_dir }}"
     redhat_subscription_client_id: "{{ vaulted_redhat_subscription_client_id }}"
     redhat_subscription_client_secret: "{{ vaulted_redhat_subscription_client_secret }}"
     aap_platform_vault_path: "usecases/{{ cac_usecase }}/env_variables.yml"

@@ -1,12 +1,12 @@
 ---
 # Apply the AAP infrastructure of one use case to the target AAP: credential
 # types, credentials, inventories, hosts, groups and projects from the use
-# case's CaC tree. First node of the use case's workflow (infra, content,
+# case's aap-infra/ tree. First node of the use case's workflow (infra, content,
 # config); the same playbook serves every use case.
 #
 # A project whose collections only come with the content part fails its
 # first sync here unless its tree sets wait: false; the config part updates
-# every project of the tree before the job templates.
+# the projects its job templates use before applying them.
 #
 # Login: the target AAP's MCP token from the private vault
 # (vaulted_aap_instance_tokens[usecase_target_aap].mcp), also for its hub.
@@ -30,7 +30,7 @@
   become: false
   vars:
     usecase: "{{ usecase_catalog[usecase_name] }}"
-    usecase_tree: "{{ usecase_scratch.path }}/{{ usecase.path }}"
+    usecase_tree: "{{ usecase_scratch.path }}/aap-infra"
     dir_orgs_vars: "{{ usecase_tree }}"
     controller_configuration_filetree_read_layout: create
     aap_hostname: "https://{{ usecase_target_aap_fqdn }}"
