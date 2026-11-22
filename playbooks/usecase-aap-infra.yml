@@ -1,8 +1,8 @@
 ---
-# Apply the AAP infrastructure of one use case to the target AAP: credential
-# types, credentials, inventories, hosts, groups and projects from the use
-# case's aap-infra/ tree. First node of the use case's workflow (infra, content,
-# config); the same playbook serves every use case.
+# Apply the AAP infrastructure of one use case to the target AAP: labels,
+# credential types, credentials, inventories, hosts, groups and projects from
+# the use case's aap-infra/ tree. First node of the use case's workflow
+# (infra, content, config); the same playbook serves every use case.
 #
 # A project whose collections only come with the content part fails its
 # first sync here unless its tree sets wait: false; the config part updates
@@ -43,6 +43,7 @@
     # (50 polls) at 15 s per poll covers 750 s.
     controller_configuration_projects_async_delay: 15
     aap_configuration_dispatcher_roles:
+      - {role: controller_labels, var: controller_labels, tags: labels}
       - {role: controller_credential_types, var: controller_credential_types, tags: credential_types}
       - {role: controller_credentials, var: controller_credentials, tags: credentials}
       - {role: controller_inventories, var: controller_inventories, tags: inventories}
