@@ -1,5 +1,13 @@
 # Design decisions history
 
+## Retire job without the disk removal — 2026-11-22
+
+22 November 2026, CET, user authorization (cleanup before v30). Cause: the
+retire job removed the AAP VM disk as a separate step, but undefining the VM
+through `community.libvirt.virt_install` with `state: absent` already deletes
+its disk from the pool, so the step never found anything (seen at the v29
+retire). Fix: the step and its variable are gone. Commit `2a45e38` (v0.0.54).
+
 ## Host names without the deployment version — 2026-11-22
 
 Decided by the user on 19/20 November 2026 (CET; bead bead-wd-0gnz.41),
