@@ -289,7 +289,7 @@ files with exactly the collections the deployer project needs
 case deployer tree (`aap_deployer_cac_dir`, `aap-content/usecase-deployer/`, a
 sibling of the base content tree) and
 applies only its inventory, project, job templates and workflows; the
-project's first sync installs the collections from the new hub (about 6 min).
+project's first sync installs the collections from the new hub (6 to 14 min; waited for up to 25 min).
 Route timeouts keep their defaults.
 
 The use case deployer (job template "Deploy UseCases to AAP",

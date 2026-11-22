@@ -127,13 +127,13 @@
       vars:
         dir_orgs_vars: "{{ cac_scratch.path }}/{{ aap_deployer_cac_dir }}"
 
-    # The project's first sync installs its collections (about 6 min on v30);
-    # the CoP wait (50 polls) at 15 s per poll covers 750 s.
+    # The project's first sync installs its collections (about 6 min on v30,
+    # 14 min on v31); the CoP wait (50 polls) at 30 s per poll covers 1500 s.
     - name: Apply the use case deployer tree
       ansible.builtin.include_role:
         name: infra.aap_configuration.dispatch
       vars:
-        controller_configuration_projects_async_delay: 15
+        controller_configuration_projects_async_delay: 30
         aap_configuration_dispatcher_roles:
           - {role: controller_inventories, var: controller_inventories, tags: inventories}
           - {role: controller_projects, var: controller_projects, tags: projects}
