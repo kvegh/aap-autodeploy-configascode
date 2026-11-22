@@ -11,7 +11,8 @@
 #      undefined) and its disk
 #   2. the AAP vhost and the Let's Encrypt certificate of the AAP name on the
 #      hypervisor
-#   3. the AAP VM's host in the AAP inventory
+#   3. every host in the AAP inventory with the version as a whole part of
+#      its name, for example aap27-v24
 #   4. every A record in the zone with the version as a whole label, for
 #      example host.v24 and aap.v24, but never host.v240
 #   5. the AAP VM's Gateway tokens in the private repository's vault; the
@@ -29,8 +30,9 @@
 # inventory, the Git write credential, the DNS credential and the machine
 # credential of the hypervisor, the vault credential of the private
 # repository, and the standard Red Hat Ansible Automation
-# Platform credential, which hands the controller URL and login to
-# ansible.controller as environment variables:
+# Platform credential, which hands the controller URL and token to the
+# ansible.controller lookup as environment variables and to the play as
+# aap_hostname and aap_token:
 #   retire_versions        survey text, versions separated by commas or spaces
 #   counter_repository     private repository as owner/name
 #   counter_file_path      counter file in that repository, from the CaC inventory
@@ -173,14 +175,28 @@
       | select('search', '(?i)(^|[.-])(' ~ retire_labels | join('|') ~ ')([.-]|$)') | list }}
   tasks:
     # Before DNS and the live list, so a failure leaves the version live.
-    - name: Remove the AAP VM's host from the AAP inventory
-      ansible.controller.host:
-        name: "{{ aap_vm_name }}"
-        inventory: "{{ aap_inventory_name }}"
-        state: absent
-      loop: "{{ retire_labels }}"
-      vars:
-        autodeploy_deployment_version: "{{ item }}"
+    # AAP refuses to delete a host while a job runs on its inventory, and this
+    # job does. Removing it from the inventory's host list deletes it without
+    # that check (documented API of the inventory's hosts list).
+    - name: Remove the AAP VMs' hosts from the AAP inventory
+      ansible.builtin.uri:
+        url: "{{ aap_hostname }}/api/controller/v2/inventories/{{ item.inventory }}/hosts/"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ aap_token }}"
+        body_format: json
+        body:
+          id: "{{ item.id }}"
+          disassociate: true
+        status_code: 204
+        timeout: 30
+      loop: >-
+        {{ query('ansible.controller.controller_api', 'hosts',
+                 query_params={'inventory__name': aap_inventory_name,
+                               'name__iregex': '(^|[.-])(' ~ retire_labels | join('|') ~ ')([.-]|$)'}) }}
+      loop_control:
+        label: "{{ item.name }}"
+      changed_when: true
 
     # A partial list would let names survive while the version leaves the live
     # list, and no rerun would find them again.
