@@ -1,0 +1,55 @@
+---
+# Apply the AAP infrastructure of one use case to the target AAP: credential
+# types, credentials, inventories, hosts, groups and projects from the use
+# case's CaC tree. First node of the use case's workflow (infra, content,
+# config); the same playbook serves every use case.
+#
+# A project whose collections only come with the content part fails its
+# first sync here unless its tree sets wait: false; the config part updates
+# every project of the tree before the job templates.
+#
+# Login: the target AAP's MCP token from the private vault
+# (vaulted_aap_instance_tokens[usecase_target_aap].mcp), also for its hub.
+# The use case tree must not define the login variables.
+#
+# Credentials: the GitHub read credential of the private repository and its
+# vault credential (it also decrypts the use case vaults).
+#
+# Required variables, from the job template, the workflow and the deployer:
+#   cac_repository, cac_repository_ref, cac_usecase, usecase_catalog_file
+#                          see tasks/usecase-tree-read.yml
+#   usecase_name           use case, from the workflow
+#   usecase_target_aap     target AAP VM name, a key of the vault tokens,
+#                          from the deployer's survey
+# From the catalog: usecase_catalog, usecase_target_aap_fqdn.
+
+- name: Apply the AAP infrastructure of one use case
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    usecase: "{{ usecase_catalog[usecase_name] }}"
+    usecase_tree: "{{ usecase_scratch.path }}/{{ usecase.path }}"
+    dir_orgs_vars: "{{ usecase_tree }}"
+    controller_configuration_filetree_read_layout: create
+    aap_hostname: "https://{{ usecase_target_aap_fqdn }}"
+    aap_token: "{{ vaulted_aap_instance_tokens[usecase_target_aap].mcp }}"
+    hub_token: "{{ aap_token }}"
+    aap_validate_certs: true
+    aap_configuration_secure_logging: true
+    aap_configuration_async_dir: /tmp/.ansible_async  # empty default broke async_status ("could not find job") on ansible-core 2.20
+    aap_configuration_dispatcher_roles:
+      - {role: controller_credential_types, var: controller_credential_types, tags: credential_types}
+      - {role: controller_credentials, var: controller_credentials, tags: credentials}
+      - {role: controller_inventories, var: controller_inventories, tags: inventories}
+      - {role: controller_hosts, var: controller_hosts, tags: hosts}
+      - {role: controller_host_groups, var: controller_groups, tags: groups}
+      - {role: controller_projects, var: controller_projects, tags: projects}
+  tasks:
+    - name: Read the use case tree
+      ansible.builtin.import_tasks: tasks/usecase-tree-read.yml
+
+    - name: Apply the use case's AAP infrastructure
+      ansible.builtin.include_role:
+        name: infra.aap_configuration.dispatch

@@ -1,0 +1,53 @@
+---
+# Apply the AAP configuration of one use case to the target AAP: job
+# templates (with their surveys) and workflows from the use case's CaC tree.
+# Third node of the use case's workflow (infra, content, config); the same
+# playbook serves every use case. Nothing is launched.
+#
+# The tree's projects are updated first: they were created before their
+# collections were in the hub, and a job template needs its playbook in a
+# synced project.
+#
+# Login, credentials and required variables: as usecase-aap-infra.yml.
+
+- name: Apply the AAP configuration of one use case
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    usecase: "{{ usecase_catalog[usecase_name] }}"
+    usecase_tree: "{{ usecase_scratch.path }}/{{ usecase.path }}"
+    dir_orgs_vars: "{{ usecase_tree }}"
+    controller_configuration_filetree_read_layout: create
+    aap_hostname: "https://{{ usecase_target_aap_fqdn }}"
+    aap_token: "{{ vaulted_aap_instance_tokens[usecase_target_aap].mcp }}"
+    hub_token: "{{ aap_token }}"
+    aap_validate_certs: true
+    aap_configuration_secure_logging: true
+    aap_configuration_async_dir: /tmp/.ansible_async  # empty default broke async_status ("could not find job") on ansible-core 2.20
+    aap_configuration_dispatcher_roles:
+      - {role: controller_job_templates, var: controller_templates, tags: job_templates}
+      - {role: controller_workflow_job_templates, var: controller_workflows, tags: workflow_job_templates}
+  module_defaults:
+    group/ansible.controller.controller:
+      aap_hostname: "{{ aap_hostname }}"
+      aap_token: "{{ aap_token }}"
+      aap_validate_certs: "{{ aap_validate_certs }}"
+  tasks:
+    - name: Read the use case tree
+      ansible.builtin.import_tasks: tasks/usecase-tree-read.yml
+
+    - name: Update the use case's projects
+      ansible.controller.project_update:
+        name: "{{ item.name }}"
+        organization: "{{ item.organization | default(omit) }}"
+        wait: true
+        timeout: "{{ item.timeout | default(omit) }}"
+      loop: "{{ controller_projects | default([]) }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Apply the use case's AAP configuration
+      ansible.builtin.include_role:
+        name: infra.aap_configuration.dispatch

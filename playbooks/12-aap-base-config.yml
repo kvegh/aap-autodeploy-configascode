@@ -10,13 +10,20 @@
 # Community of Practice (CoP) collections: hub collection remotes,
 # repositories and distributions (no sync), the deploying AAP's hub registry
 # and the default EE repository, the Git write credential type, the vault,
-# Git write, Galaxy and registry credentials, the default EE and the Galaxy
-# credentials of organization Default; sync the default EE from the deploying
-# AAP's hub and make it the global default.
+# Git write, Galaxy and registry credentials, this AAP's own AAP credential
+# (with its MCP token), the default EE and the Galaxy credentials of
+# organization Default; sync the default EE from the deploying AAP's hub and
+# make it the global default; sync the collections the use case deployer's
+# project needs into this AAP's hub. Last, read the use case deployer tree and
+# apply its inventory, project, job templates and workflows.
 #
-# The base tree must not live under usecases/: the CaC apply job would apply
-# it to the deploying AAP. The download stays in the execution environment's
-# scratch directory, which goes away with the job.
+# Neither tree may live under usecases/: the CaC apply job would apply it to
+# the deploying AAP. The deployer tree is a sibling of the base tree, not
+# inside it: filetree_read searches recursively and would apply the deployer
+# project before its collections are synced. The second filetree_read keeps
+# the facts of the first, so only the deployer's object types are applied.
+# The download stays in the execution environment's scratch directory, which
+# goes away with the job.
 #
 # Rerunnable: tokens are created once per AAP (the vault entry is the record);
 # the rest converges. Retiring an instance removes its vault entry.
@@ -32,6 +39,8 @@
 #                                   the vault is written to) and use case whose
 #                                   env_variables.yml is the vault file
 #   aap_base_cac_dir                base CaC tree in the private repository
+#   aap_deployer_cac_dir            use case deployer tree in the private
+#                                   repository
 #   aap_vm_name, aap_vm_fqdn        AAP VM name (the vault key) and AAP name
 #   aap_base_user                   login and token owner; its password is the
 #                                   installer's admin password
@@ -40,7 +49,7 @@
 # _secret, vaulted_cac_vault_password (to write the vault), the secrets the
 # tree refers to, and vaulted_aap_instance_tokens (written here: per AAP VM
 # name, hub and mcp).
-# Given to the tree: aap_base_tokens (hub, mcp).
+# Given to the trees: aap_base_tokens (hub, mcp), cac_scratch (the download).
 
 - name: Configure the base of the new AAP
   hosts: localhost
@@ -181,3 +190,30 @@
       ansible.controller.settings:
         name: DEFAULT_EXECUTION_ENVIRONMENT
         value: "{{ aap_base_default_ee.id }}"
+
+    # What the deployer project's sync needs; the CoP sync role would stop
+    # waiting after about 50 s here too.
+    - name: Sync the collection repositories from their remotes
+      ansible.hub.collection_repository_sync:
+        name: "{{ item.name }}"
+        wait: true
+        timeout: "{{ item.timeout }}"
+      loop: "{{ hub_collection_repositories }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Read the use case deployer tree
+      ansible.builtin.include_role:
+        name: infra.aap_configuration_extended.filetree_read
+      vars:
+        dir_orgs_vars: "{{ cac_scratch.path }}/{{ aap_deployer_cac_dir }}"
+
+    - name: Apply the use case deployer tree
+      ansible.builtin.include_role:
+        name: infra.aap_configuration.dispatch
+      vars:
+        aap_configuration_dispatcher_roles:
+          - {role: controller_inventories, var: controller_inventories, tags: inventories}
+          - {role: controller_projects, var: controller_projects, tags: projects}
+          - {role: controller_job_templates, var: controller_templates, tags: job_templates}
+          - {role: controller_workflow_job_templates, var: controller_workflows, tags: workflow_job_templates}

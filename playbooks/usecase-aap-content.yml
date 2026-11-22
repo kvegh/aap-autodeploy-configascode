@@ -1,0 +1,66 @@
+---
+# Apply the AAP content of one use case to the target AAP: hub collection
+# remotes and repositories, EE registries and repositories, and EEs from the
+# use case's CaC tree; then sync the collection and EE repositories. Second
+# node of the use case's workflow (infra, content, config); the same
+# playbook serves every use case.
+#
+# The syncs run here and not in the CoP sync roles, which stop waiting after
+# about 50 s; the job template's timeout bounds them. A sync adds content and
+# removes none. Use case EEs come from the deploying AAP's hub through the
+# base's container registry, as the default EE does.
+#
+# Login, credentials and required variables: as usecase-aap-infra.yml.
+
+- name: Apply the AAP content of one use case
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    usecase: "{{ usecase_catalog[usecase_name] }}"
+    usecase_tree: "{{ usecase_scratch.path }}/{{ usecase.path }}"
+    dir_orgs_vars: "{{ usecase_tree }}"
+    controller_configuration_filetree_read_layout: create
+    aap_hostname: "https://{{ usecase_target_aap_fqdn }}"
+    aap_token: "{{ vaulted_aap_instance_tokens[usecase_target_aap].mcp }}"
+    hub_token: "{{ aap_token }}"
+    aap_validate_certs: true
+    aap_configuration_secure_logging: true
+    aap_configuration_async_dir: /tmp/.ansible_async  # empty default broke async_status ("could not find job") on ansible-core 2.20
+    aap_configuration_dispatcher_roles:
+      - {role: hub_collection_remote, var: hub_collection_remotes, tags: collection_remotes}
+      - {role: hub_collection_repository, var: hub_collection_repositories, tags: collection_repositories}
+      - {role: hub_ee_registry, var: hub_ee_registries, tags: ee_registries}
+      - {role: hub_ee_repository, var: hub_ee_repositories, tags: ee_repositories}
+      - {role: controller_execution_environments, var: controller_execution_environments, tags: execution_environments}
+  module_defaults:
+    group/ansible.hub.hub:
+      aap_hostname: "{{ aap_hostname }}"
+      aap_token: "{{ aap_token }}"
+      validate_certs: "{{ aap_validate_certs }}"
+  tasks:
+    - name: Read the use case tree
+      ansible.builtin.import_tasks: tasks/usecase-tree-read.yml
+
+    - name: Apply the use case's AAP content
+      ansible.builtin.include_role:
+        name: infra.aap_configuration.dispatch
+
+    - name: Sync the use case's collection repositories from their remotes
+      ansible.hub.collection_repository_sync:
+        name: "{{ item.name }}"
+        wait: true
+        timeout: "{{ item.timeout | default(omit) }}"
+      loop: "{{ hub_collection_repositories | default([]) | selectattr('remote', 'defined') }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Sync the use case's EE repositories from their registries
+      ansible.hub.ah_ee_repository_sync:
+        name: "{{ item.name }}"
+        wait: true
+        timeout: "{{ item.timeout | default(omit) }}"
+      loop: "{{ hub_ee_repositories | default([]) | selectattr('registry', 'defined') }}"
+      loop_control:
+        label: "{{ item.name }}"

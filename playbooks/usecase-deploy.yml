@@ -1,0 +1,27 @@
+---
+# Deploy the chosen use cases to the chosen AAP: run each chosen use case's
+# workflow (infra, content, config) on this AAP, one after the other, each
+# against the target AAP. Started from the job template "Deploy UseCases to
+# AAP"; the first failed workflow stops the job.
+#
+# Login: this AAP's own credential (Red Hat Ansible Automation Platform type,
+# holding this AAP's MCP token); the modules read it from the environment.
+#
+# Required variables, from the job template and its survey:
+#   usecase_names            chosen use cases (multiple choice)
+#   usecase_target_aap       target AAP VM name, passed to each workflow
+#   usecase_workflow_prefix  workflow name = prefix, space, use case
+
+- name: Deploy the chosen use cases to the chosen AAP
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  tasks:
+    - name: Run the workflow of each chosen use case against the target AAP
+      ansible.controller.workflow_launch:
+        name: "{{ usecase_workflow_prefix }} {{ item }}"
+        extra_vars:
+          usecase_target_aap: "{{ usecase_target_aap }}"
+        wait: true
+      loop: "{{ usecase_names }}"
