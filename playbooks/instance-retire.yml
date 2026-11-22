@@ -7,8 +7,8 @@
 #
 # Everything an instance owns is found by the version in its name; there is no
 # separate registry. This version cleans six things:
-#   1. the AAP VM's snapshots, the VM on the hypervisor (stopped and
-#      undefined) and its disk
+#   1. the AAP VM's snapshots and the VM on the hypervisor (stopped and
+#      undefined; removing it also deletes its disk from the pool)
 #   2. the AAP vhost and the Let's Encrypt certificate of the AAP name on the
 #      hypervisor
 #   3. every host in the AAP inventory with the version as a whole part of
@@ -45,7 +45,6 @@
 #   dns_godaddy_token      GoDaddy API token for the zone
 #   dns_zone               DNS zone, for example example.com
 #   aap_vm_name            AAP VM name, a template on autodeploy_deployment_version
-#   aap_vm_disk_path       its disk, a template on aap_vm_name
 #   aap_vm_fqdn            AAP name, the name of its certificate and vhost
 #   aap_vm_snapshot_names  dict of the AAP VM's snapshot names
 #   aap_inventory_name     AAP inventory the VM's host is recorded in
@@ -127,14 +126,6 @@
     - name: Stop and undefine the AAP VM
       community.libvirt.virt_install:
         name: "{{ aap_vm_name }}"
-        state: absent
-      loop: "{{ hostvars['localhost'].retire_labels }}"
-      vars:
-        autodeploy_deployment_version: "{{ item }}"
-
-    - name: Remove the AAP VM disk
-      ansible.builtin.file:
-        path: "{{ aap_vm_disk_path }}"
         state: absent
       loop: "{{ hostvars['localhost'].retire_labels }}"
       vars:
