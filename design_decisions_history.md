@@ -1,5 +1,100 @@
 # Design decisions history
 
+## Generic use case deployer framework — 2026-11-22
+
+Designed by the user on 22 November 2026 (CET; bead bead-wd-0gnz.39),
+implemented the same day, 19:00–19:35 CET. Commits `0b3c249` (v0.0.55) and
+`c1d822b` (v0.0.56); private CaC `2f3a2b7` (v0.0.62). The use cases' own CaC
+is not converted yet; nothing of a use case was deployed.
+
+User decisions:
+- Three generic playbooks for all use cases, AAP infra (credentials,
+  inventories, hosts, projects), AAP content (hub collections, EEs) and AAP
+  config (job templates, workflows, surveys); each reads the chosen use
+  case's CoP filetree from that use case's -secrets repository and applies
+  only its own object types to the chosen target AAP.
+- Per use case a 3-node workflow infra → content → config whose only
+  difference is the use case; repository and path come from configuration in
+  the private repository.
+- Job template "Deploy UseCases to AAP" with two survey questions: the use
+  cases (multiple choice) and the target AAP; it launches the chosen use
+  cases' workflows against that target.
+- The deployer objects are the base configuration's last step on every new
+  AAP, after the hub content and the default EE; they stay in this repository.
+- Login to the target AAP with its existing MCP token
+  (`vaulted_aap_instance_tokens[<instance>].mcp`), no third token.
+- Repository access: one GitHub read token per use case -secrets repository
+  (answer to open question 1).
+- Use cases are deployed as captured and not run; their own infra part
+  creates what their job templates reference (question 2).
+- Use cases use `ee-proj-aap-cac` where it suffices; own images (sniper
+  patching, orchestrator) are pulled from the deploying AAP's hub the same
+  way as the base's (question 3).
+- RHEL ConfigAsCode is left out of the survey for now: seven use cases
+  (question 4).
+
+Agent choices:
+- Playbooks `usecase-aap-infra.yml`, `usecase-aap-content.yml`,
+  `usecase-aap-config.yml`, `usecase-deploy.yml`, unnumbered (outside the
+  deployment workflows); shared reading in `tasks/usecase-tree-read.yml`;
+  variable prefix `usecase_`. Object types per part through the CoP
+  `dispatch` with a per-playbook `aap_configuration_dispatcher_roles` list.
+  Infra also applies credential types and groups (needed by credentials and
+  inventories); inventory sources, schedules and EDA objects are not part of
+  any list yet (not settled).
+- Catalog in the private repository (`usecase_catalog`, keyed by the survey
+  names): repository, ref, tree path (convention `aap/` with
+  `env_variables.yml` there) and the *name* of the vault variable holding the
+  token. A name, not a template: on ansible-core 2.16 reading one entry
+  templated the whole catalog and failed on the missing tokens of other use
+  cases (render test). One shared token instead would only point several
+  entries at one variable; no code change either way.
+- Target AAP: survey choices are the vault token keys at base time; its name
+  follows the naming scheme in the private catalog
+  (`aap27-vXY` → `aap27.vXY.<zone>`).
+- The deployer job template logs in to its own AAP with a new credential "AAP
+  API-NGNG" in the base tree holding this AAP's MCP token (same token), so
+  `usecase-deploy.yml` is one task; the credential lives in the base tree
+  because a second `filetree_read` accumulates credentials and would
+  re-apply the base ones. Workflows run one after the other; the first
+  failure stops the job.
+- Content: collection and EE repository syncs run as explicit
+  `ansible.hub` tasks without the CoP 50 s limit; syncs add, never remove.
+  Config: the tree's projects are updated (`project_update`, wait) before
+  the job templates, because infra creates them before their collections are
+  in the hub (trees set `wait: false` on such projects).
+- Base: the deployer's collections go to the existing remotes as
+  `requirements_file`s (exactly `collections/requirements.yml` plus
+  dependencies, per remote; versions and dependencies read from the
+  deploying AAP's hub), `sync_dependencies: false` (every dependency listed;
+  a remote would look for dependencies on itself), explicit repository sync
+  with timeout. The deployer tree is a sibling of the base tree; only its
+  four object types are dispatched (the second `filetree_read` keeps the
+  first one's facts).
+- Fix (job 5345 of JT 210, v30, failed): the project's first sync on the new
+  AAP installs its collections (366 s) and the CoP project wait gave up after
+  50 polls of 1 s; poll interval 15 s (750 s) in the base and the infra part
+  (`c1d822b`).
+
+Live: JT 210 extra variable `aap_deployer_cac_dir` and description patched
+(single-object change, mirrored in the private CaC). Project 193 synced
+(5344, 5347). Job 5348 of JT 210 (v30) successful, 18:21–18:26 UTC. On v30:
+12 collections in the hub, project "AAP AutoDeploy-NGNG" synced (update 1
+successful; update 2 failed on a transient artifact hash mismatch of
+rhel_system_roles, as seen on the deploying AAP before; update 3
+successful), the three generic job templates, "Deploy UseCases to AAP" with
+both survey questions (seven use cases; target `aap27-v30`), seven
+workflows, credential "AAP API-NGNG". The deployer was not launched.
+Checks: ansible-lint production strict 0/0 on the five playbooks and both
+task files (ansible-core 2.16); syntax check; render test of both trees and
+the catalog inside the EE (ansible-core 2.20.10).
+
+Open: the use cases' CaC conversion to `aap/` trees; the per-repository
+tokens in the vault (existing and valid: aiops, sniper, CCNG; expired:
+Windows, Assistant, Orchestrator; none: Elastic); a use case that sets
+requirements on a shared remote replaces the base's requirements list there
+(content stays, the next base run restores the list).
+
 ## Retire job without the disk removal — 2026-11-22
 
 22 November 2026, CET, user authorization (cleanup before v30). Cause: the

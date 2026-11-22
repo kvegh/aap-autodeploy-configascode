@@ -248,9 +248,31 @@ their repositories and distributions (no sync), the deploying AAP's hub as an
 anonymous container registry and the repository of the default EE, the Git
 write credential type, the vault, Git write, three Galaxy and one registry
 credential on the AAP's own hub, the default EE pinned by digest, and the
-Galaxy credentials of organization Default. Last, it syncs the EE repository
-itself (the CoP sync role stops waiting after about 50 s) and sets
-`DEFAULT_EXECUTION_ENVIRONMENT`. Route timeouts keep their defaults.
+Galaxy credentials of organization Default, and the AAP's own API credential
+with its MCP token. Then it syncs the EE repository itself (the CoP sync role
+stops waiting after about 50 s), sets `DEFAULT_EXECUTION_ENVIRONMENT` and
+syncs the three collection repositories, whose remotes carry requirements
+files with exactly the collections the deployer project needs
+(`collections/requirements.yml` plus dependencies). Last, it reads the use
+case deployer tree (`aap_deployer_cac_dir`, a sibling of the base tree) and
+applies only its inventory, project, job templates and workflows; the
+project's first sync installs the collections from the new hub (about 6 min).
+Route timeouts keep their defaults.
+
+The use case deployer (job template "Deploy UseCases to AAP",
+`usecase-deploy.yml`) runs, for each use case chosen in its survey, that use
+case's workflow on the AAP it lives on, passing the target AAP chosen in the
+second survey question (an AAP VM name with tokens in the vault). Each
+workflow has the same three generic nodes, infra → content → config
+(`usecase-aap-infra.yml`, `usecase-aap-content.yml`, `usecase-aap-config.yml`);
+only the workflow variable `usecase_name` differs. Each node downloads the
+private repository (vault and use case catalog), then the use case's -secrets
+repository with the GitHub token the catalog names (one vault variable per
+repository), loads the tree's own vault, reads the tree with `filetree_read`
+and applies only its own object types with `dispatch`, logged in to the target
+with the target's MCP token. Content syncs run explicitly (no 50 s limit);
+config updates the tree's projects before the job templates. Use cases are
+deployed, never launched.
 
 The web edge's port-80 catch-all serves `/.well-known/acme-challenge/` from
 the certbot webroot for every name and answers everything else with 444, so
@@ -264,13 +286,14 @@ stage has been proven here.
 
 - Playbooks are `NN-subject-action.yml`, numbered in execution order. Jobs
   outside the deployment workflow, started by hand, are unnumbered
-  (`instance-retire.yml`, `aap-cac-apply.yml`).
+  (`instance-retire.yml`, `aap-cac-apply.yml`), and so are the use case
+  deployer's (`usecase-*.yml`).
 - Variables use `snake_case` with a prefix naming their source: `robot_` for
   provider API inputs and confirmations, `provider_` for values this automation
   derives at run time, `counter_` for the deployment counter, `dns_` for the host DNS stage, `rhsm_` for subscription inputs,
   `host_` for host configuration, `aap_` for the AAP inventory the stages
   update, `aap_vm_` for the AAP VM, `retire_` for the instance retire job, `cac_` for the CaC apply
-  job. Variables the CoP roles define keep their CoP names (`dir_orgs_vars`,
+  job, `usecase_` for the use case deployer. Variables the CoP roles define keep their CoP names (`dir_orgs_vars`,
   `aap_hostname`). Registered
   values carry the stage name, for example `rhel_convert_`. Values published
   for later workflow nodes start with `autodeploy_`.

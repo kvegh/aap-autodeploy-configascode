@@ -66,12 +66,14 @@ Thirteen stages:
   disk, runs the containerized installer with an inventory rendered from this
   repository (secrets from the private vault), proves the Gateway locally,
   writes the AAP vhost on the hypervisor and proves the public URL.
-- `playbooks/12-aap-base-config.yml`, thirteen tasks, gives the new AAP its
+- `playbooks/12-aap-base-config.yml`, sixteen tasks, gives the new AAP its
   base configuration through its public URL: Gateway tokens for its own hub
   and for MCP clients (created once, stored in the private vault), the
   subscription, and the private repository's base tree applied with the CoP
   collections (hub sources, default EE from the deploying AAP's hub,
-  credentials), then the EE sync and the global default EE.
+  credentials incl. the AAP's own API credential), then the EE sync, the
+  global default EE, the sync of the deployer project's collections and, last,
+  the use case deployer tree (inventory, project, job templates, workflows).
 
 Three jobs outside the deployment workflow, started by hand:
 
@@ -82,6 +84,22 @@ Three jobs outside the deployment workflow, started by hand:
 - `playbooks/aap-cac-apply.yml` applies the CaC of one use case from the
   private repository to AAP with the Community of Practice collections
   (`filetree_read`, then `dispatch`).
+
+The use case deployer, installed on every new AAP by the base stage:
+
+- `playbooks/usecase-deploy.yml`, one task, job template "Deploy UseCases to
+  AAP": runs the workflow of each use case chosen in its survey, one after the
+  other, against the target AAP chosen in its survey.
+- Per use case one workflow of three generic nodes, the same for every use
+  case: `playbooks/usecase-aap-infra.yml` (eleven tasks; credential types,
+  credentials, inventories, hosts, groups, projects),
+  `playbooks/usecase-aap-content.yml` (thirteen tasks; hub collection and EE
+  sources, synced, and EEs) and `playbooks/usecase-aap-config.yml` (twelve
+  tasks; project updates, job templates with surveys, workflows). Each reads
+  the use case's CoP tree from its own -secrets repository
+  (`playbooks/tasks/usecase-tree-read.yml`; repository, path and token
+  variable from the private catalog) and logs in to the target with its MCP
+  token from the private vault. Nothing of the use cases is launched.
 
 ## Before you run it
 
