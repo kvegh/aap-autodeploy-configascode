@@ -1,0 +1,141 @@
+---
+# Give a freshly installed AAP its base content, through its public URL,
+# logged in as the installer's admin, and install the use case deployer last.
+#
+# Order: apply the base content CaC tree of the private repository with the
+# Community of Practice (CoP) collections: hub collection remotes,
+# repositories and distributions (no sync), the deploying AAP's hub registry
+# and the default EE repository, the Galaxy and registry credentials on this
+# AAP's own hub (with its hub token), the default EE and the Galaxy
+# credentials of organization Default; sync the default EE from the deploying
+# AAP's hub and make it the global default; sync the collections the use case
+# deployer's project needs into this AAP's hub. Last, read the use case
+# deployer tree and apply its inventory, project, job templates and
+# workflows.
+#
+# The platform configuration (60-aap-platform-config.yml) ran before: it
+# stored this AAP's tokens in the vault and created the credentials the
+# deployer uses. Neither tree may live under usecases/: the CaC apply job
+# would apply it to the deploying AAP. The deployer tree is a sibling of the
+# content tree, not inside it: filetree_read searches recursively and would
+# apply the deployer project before its collections are synced. The second
+# filetree_read keeps the facts of the first, so only the deployer's object
+# types are applied. The download stays in the execution environment's
+# scratch directory, which goes away with the job.
+#
+# Rerunnable: everything converges.
+#
+# Credentials: GitHub AutoDeploy CaC Secrets-NGNG (counter_git_username,
+# counter_git_token) and the vault credential of the private repository. No
+# AAP credential: every task logs in to the new AAP.
+#
+# Required variables, from the job template, the workflow or the CaC inventory:
+#   autodeploy_deployment_version   deployment version, for example v29
+#   cac_repository, cac_repository_ref, cac_usecase
+#                                   private repository, ref and use case whose
+#                                   env_variables.yml is the vault file
+#   aap_base_content_cac_dir        base content CaC tree in the private
+#                                   repository
+#   aap_deployer_cac_dir            use case deployer tree in the private
+#                                   repository
+#   vm_name, vm_fqdn                AAP VM name (the vault key) and AAP name
+#   aap_base_user                   login; its password is the installer's
+#                                   admin password
+# From the vault (env_variables.yml): vaulted_aap_installer
+# (gateway_admin_password), vaulted_aap_instance_tokens (this AAP's tokens,
+# written by the platform configuration) and the secrets the trees refer to.
+# Given to the trees: aap_base_tokens (hub, mcp), cac_scratch (the download).
+
+- name: Configure the base content of the new AAP
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    aap_hostname: "https://{{ vm_fqdn }}"
+    aap_username: "{{ aap_base_user }}"
+    aap_password: "{{ vaulted_aap_installer.gateway_admin_password }}"
+    aap_validate_certs: true
+    aap_configuration_secure_logging: true
+    aap_configuration_async_dir: /tmp/.ansible_async  # empty default broke async_status ("could not find job") on ansible-core 2.20
+    controller_configuration_filetree_read_layout: create
+    dir_orgs_vars: "{{ cac_scratch.path }}/{{ aap_base_content_cac_dir }}"
+    aap_base_tokens: "{{ vaulted_aap_instance_tokens[vm_name] }}"
+  module_defaults:
+    group/ansible.controller.controller: &aap_login
+      aap_hostname: "{{ aap_hostname }}"
+      aap_username: "{{ aap_username }}"
+      aap_password: "{{ aap_password }}"
+      aap_validate_certs: "{{ aap_validate_certs }}"
+    group/ansible.hub.hub: *aap_login
+    # Without it, ansible.platform's action plugins (organization Default)
+    # read the login from the raw, untemplated play variables.
+    group/ansible.platform.gateway: *aap_login
+  tasks:
+    - name: Download the private repository
+      ansible.builtin.import_tasks: tasks/private-repository-download.yml
+
+    - name: Load the vault values
+      ansible.builtin.include_vars:
+        file: "{{ cac_scratch.path }}/usecases/{{ cac_usecase }}/env_variables.yml"
+      no_log: true
+
+    - name: Read the base content tree
+      ansible.builtin.include_role:
+        name: infra.aap_configuration_extended.filetree_read
+
+    - name: Apply the base content tree
+      ansible.builtin.include_role:
+        name: infra.aap_configuration.dispatch
+
+    # The CoP sync role stops waiting after about 50 s.
+    - name: Sync the EE repositories from their registries
+      ansible.hub.ah_ee_repository_sync:
+        name: "{{ item.name }}"
+        wait: true
+        timeout: "{{ item.timeout }}"
+      loop: "{{ hub_ee_repositories }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # The tree's only EE is the default; the setting takes its id.
+    - name: Look up the default EE
+      ansible.controller.execution_environment:
+        name: "{{ controller_execution_environments[0].name }}"
+        state: exists
+      register: aap_base_content_default_ee
+
+    - name: Make it the global default EE
+      ansible.controller.settings:
+        name: DEFAULT_EXECUTION_ENVIRONMENT
+        value: "{{ aap_base_content_default_ee.id }}"
+
+    # What the deployer project's sync needs; the CoP sync role would stop
+    # waiting after about 50 s here too.
+    - name: Sync the collection repositories from their remotes
+      ansible.hub.collection_repository_sync:
+        name: "{{ item.name }}"
+        wait: true
+        timeout: "{{ item.timeout }}"
+      loop: "{{ hub_collection_repositories }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Read the use case deployer tree
+      ansible.builtin.include_role:
+        name: infra.aap_configuration_extended.filetree_read
+      vars:
+        dir_orgs_vars: "{{ cac_scratch.path }}/{{ aap_deployer_cac_dir }}"
+
+    # The project's first sync installs its collections (about 6 min on v30);
+    # the CoP wait (50 polls) at 15 s per poll covers 750 s.
+    - name: Apply the use case deployer tree
+      ansible.builtin.include_role:
+        name: infra.aap_configuration.dispatch
+      vars:
+        controller_configuration_projects_async_delay: 15
+        aap_configuration_dispatcher_roles:
+          - {role: controller_inventories, var: controller_inventories, tags: inventories}
+          - {role: controller_projects, var: controller_projects, tags: projects}
+          - {role: controller_job_templates, var: controller_templates, tags: job_templates}
+          - {role: controller_workflow_job_templates, var: controller_workflows, tags: workflow_job_templates}

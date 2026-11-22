@@ -14,92 +14,46 @@ secrets are vault encrypted.
 
 ## What exists today
 
-Thirteen stages:
+Seven parts in two workflows; playbooks `PS-<subject>-<action>.yml`, job
+templates `AutoDeploy-NGNG PS <what>` (P part, S order).
 
-- `playbooks/00-provider-reinstall.yml`, fourteen tasks, reinstalls a confirmed
-  dedicated server with Rocky Linux 9 and removes the managed SSH port from its
-  AAP inventory host.
-- `playbooks/01-deployment-version-assign.yml`, five tasks, takes the next
-  deployment version (vXY) from the counter in the private repository and
-  writes the number plus one back, adding the assigned version to the list of
-  live instances; or takes a live version given as `deployment_version`.
-- `playbooks/02-host-dns-publish.yml`, three tasks, publishes the host name for
-  that version at GoDaddy and waits until public DNS resolves it.
-- `playbooks/03-host-access-bootstrap.yml`, twenty tasks, creates the
-  automation account (`ansible`, from the CaC) and personal accounts with
-  their CaC sudo rules, proves the automation account's login and sudo, turns
-  off root and password login minutes after the reinstall, limits login to the
-  declared accounts, and moves SSH to the managed port (SELinux label,
-  firewalld, proof on the new port, port recorded in the AAP inventory, public
-  port 22 closed, port 22 kept on the internal bridge), still on Rocky Linux,
-  so every later stage runs on it. All SSH configuration lives here.
-- `playbooks/04-rhel-convert.yml`, fourteen tasks, converts Rocky Linux 9 to
-  RHEL 9 with `convert2rhel` and proves a Red Hat kernel runs.
-- `playbooks/05-rhel-update.yml`, two tasks, updates all packages and reboots
-  if anything changed; `rhel_update_hosts` points it at another host, which
-  the AAP install stage uses for the AAP VM.
-- `playbooks/06-host-setup.yml`, 32 tasks in eight stages, configures the
-  hypervisor: base, virtualization, SELinux, storage (pools and
-  `/opt/images`), networks, firewall (web ports), web edge (nginx installed,
-  not started, no login rate limit; fail2ban with the sshd jail) and tuning.
-- `playbooks/07-host-reboot-verify.yml`, fourteen tasks, reboots the host and
-  proves the setup survived the boot: SELinux, services, libvirt networks and
-  pools, kernel values, port 22 closed and root login refused
-  from outside. Expected values are shared with the setup stages.
-- `playbooks/08-images-download.yml`, nine tasks, requires the configured free space on
-  `/opt` when an image is missing, installs rclone, downloads each missing VM
-  image from Google Drive and requires its pinned SHA-256. A corrupt file fails with its name and is
-  deleted by hand before a rerun.
-- `playbooks/09-aap-vm-create.yml`, eight tasks, copies the golden image into
-  the vms pool, grows it, prepares it with virt-customize (FQDN, automation
-  account with key and sudo, empty machine-id, no registration) and creates
-  the AAP VM `aap27-vXY` with the fixed MAC of the reservation `aap`, records
-  it as host `aap27-vXY` in the AAP inventory (reserved address, jump through
-  the hypervisor) and proves login and sudo through that jump.
-- `playbooks/10-aap-certificate-request.yml`, two tasks, starts nginx on the
-  hypervisor and obtains the Let's Encrypt certificate of the AAP name with
-  `certbot --webroot`. Before it, the AAP name's DNS record comes from
-  `02-host-dns-publish.yml`, unchanged, through its own job template.
-- `playbooks/11-aap-install.yml`, 30 tasks, registers and updates the AAP VM
-  (imports the RHEL update stage), takes cold snapshots before and after the
-  install (kept on a rerun), trusts the shared CA, grows the
-  disk, runs the containerized installer with an inventory rendered from this
-  repository (secrets from the private vault), proves the Gateway locally,
-  writes the AAP vhost on the hypervisor and proves the public URL.
-- `playbooks/12-aap-base-config.yml`, sixteen tasks, gives the new AAP its
-  base configuration through its public URL: Gateway tokens for its own hub
-  and for MCP clients (created once, stored in the private vault), the
-  subscription, and the private repository's base tree applied with the CoP
-  collections (hub sources, default EE from the deploying AAP's hub,
-  credentials incl. the AAP's own API credential), then the EE sync, the
-  global default EE, the sync of the deployer project's collections and, last,
-  the use case deployer tree (inventory, project, job templates, workflows).
+Workflow "AutoDeploy-NGNG Hypervisor deploy", once per hypervisor:
 
-Three jobs outside the deployment workflow, started by hand:
+1. Hypervisor install: `10-provider-reinstall` (erases and reinstalls Rocky
+   Linux 9 after the survey confirmation), `11-dns-record-publish` (host name
+   at GoDaddy), `12-hypervisor-access-bootstrap` (accounts, root and password
+   login off, SSH on the managed port), `13-rhel-convert`, `14-rhel-update`.
+2. Hypervisor OS config: `20-hypervisor-setup` (eight stages in
+   `playbooks/hypervisor/`: base, virtualization, SELinux, storage, networks,
+   firewall, web edge, tuning), `21-hypervisor-reboot-verify`,
+   `22-images-download` (pinned images incl. the golden image).
 
-- `playbooks/instance-retire.yml`, ten tasks, retires the versions named in
-  its survey: removes their AAP VM snapshots, VMs, disks, vhosts, certificates and AAP inventory hosts, deletes every A record with the version as a label and removes
-  the versions from the live list. Every later stage that creates something
-  per instance adds its own cleanup step here.
-- `playbooks/aap-cac-apply.yml` applies the CaC of one use case from the
-  private repository to AAP with the Community of Practice collections
-  (`filetree_read`, then `dispatch`).
+Workflow "AutoDeploy-NGNG AAP deploy", once per AAP instance (survey
+`deployment_version`, empty draws the next number):
 
-The use case deployer, installed on every new AAP by the base stage:
+3. AAP VM deploy: `30-deployment-version-assign`, `31-aap-vm-create` (golden
+   image copy, virt-customize, fixed MAC, inventory host, login via jump).
+4. AAP VM OS config: `40-aap-vm-os-config` (registration, update, snapshot
+   before the install, shared CA, root filesystem, packages).
+5. AAP software deployment: `11-dns-record-publish` with the AAP name (job
+   template 50), `51-aap-certificate-request` (Let's Encrypt),
+   `52-aap-install` (containerized installer with vault secrets, snapshot
+   after the install, vhost, public URL proof).
+6. AAP platform config: `60-aap-platform-config` (hub and MCP tokens into the
+   vault, subscription, credential type and credentials).
+7. AAP base content config: `70-aap-base-content-config` (hub remotes and
+   repositories, default EE, Galaxy and registry credentials, syncs), ending
+   with the use case deployer: job template "Deploy UseCases to AAP"
+   (`usecase-deploy.yml`) and per use case a workflow of the three generic
+   nodes `usecase-aap-infra/-content/-config.yml`. Nothing of a use case is
+   launched.
 
-- `playbooks/usecase-deploy.yml`, one task, job template "Deploy UseCases to
-  AAP": runs the workflow of each use case chosen in its survey, one after the
-  other, against the target AAP chosen in its survey.
-- Per use case one workflow of three generic nodes, the same for every use
-  case: `playbooks/usecase-aap-infra.yml` (eleven tasks; credential types,
-  credentials, inventories, hosts, groups, projects),
-  `playbooks/usecase-aap-content.yml` (thirteen tasks; hub collection and EE
-  sources, synced, and EEs) and `playbooks/usecase-aap-config.yml` (twelve
-  tasks; project updates, job templates with surveys, workflows). Each reads
-  the use case's CoP tree from its own -secrets repository
-  (`playbooks/tasks/usecase-tree-read.yml`; repository, path and token
-  variable from the private catalog) and logs in to the target with its MCP
-  token from the private vault. Nothing of the use cases is launched.
+Parts 3–4 use generic `vm_` variables; the AAP values sit in the CaC.
+
+Started by hand: `instance-retire.yml` (removes the named versions' VM,
+snapshots, vhost, certificate, inventory host, DNS records, vault tokens and
+live list entry) and `aap-cac-apply.yml` (applies one use case's CaC tree to
+the deploying AAP).
 
 ## Before you run it
 
@@ -118,6 +72,5 @@ The use case deployer, installed on every new AAP by the base stage:
 ## State of verification
 
 Strict lint and syntax check pass, also inside the AAP execution environment on
-ansible-core 2.20.10. Only the deployment version stage has run for real, through
-its AAP job template; the reinstall stage has a job template but has not run.
-The previous implementation remains the working one.
+ansible-core 2.20.10. Both workflows have run end to end from bare metal on the
+test hypervisor (v30, 22 November 2026).

@@ -132,7 +132,7 @@
 
     # The network checks run last and from the execution environment, so they
     # also prove the permanent firewall rules. The web ports are not checked:
-    # nginx does not run until WF2 starts it.
+    # nginx does not run until the AAP deployment starts it.
     - name: Require port 22 closed on the public address from outside
       ansible.builtin.wait_for:
         host: "{{ dns_host_ipv4 }}"

@@ -44,9 +44,9 @@
 #                          is the vault file
 #   dns_godaddy_token      GoDaddy API token for the zone
 #   dns_zone               DNS zone, for example example.com
-#   aap_vm_name            AAP VM name, a template on autodeploy_deployment_version
-#   aap_vm_fqdn            AAP name, the name of its certificate and vhost
-#   aap_vm_snapshot_names  dict of the AAP VM's snapshot names
+#   vm_name            AAP VM name, a template on autodeploy_deployment_version
+#   vm_fqdn            AAP name, the name of its certificate and vhost
+#   vm_snapshot_names  dict of the AAP VM's snapshot names
 #   aap_inventory_name     AAP inventory the VM's host is recorded in
 # From the vault: vaulted_cac_vault_password (to write the vault) and
 # vaulted_aap_instance_tokens (per AAP VM name).
@@ -116,16 +116,16 @@
     # as long as the snapshot does.
     - name: Delete the AAP VM's snapshots
       ansible.builtin.command:
-        argv: [virsh, snapshot-delete, --domain, "{{ aap_vm_name }}", --snapshotname, "{{ item.1 }}"]
-        removes: "/var/lib/libvirt/qemu/snapshot/{{ aap_vm_name }}/{{ item.1 }}.xml"
-      loop: "{{ hostvars['localhost'].retire_labels | product(aap_vm_snapshot_names.values()) | list }}"
+        argv: [virsh, snapshot-delete, --domain, "{{ vm_name }}", --snapshotname, "{{ item.1 }}"]
+        removes: "/var/lib/libvirt/qemu/snapshot/{{ vm_name }}/{{ item.1 }}.xml"
+      loop: "{{ hostvars['localhost'].retire_labels | product(vm_snapshot_names.values()) | list }}"
       vars:
         autodeploy_deployment_version: "{{ item.0 }}"
 
     # The CaC names are templates on the deployment version; each item sets it.
     - name: Stop and undefine the AAP VM
       community.libvirt.virt_install:
-        name: "{{ aap_vm_name }}"
+        name: "{{ vm_name }}"
         state: absent
       loop: "{{ hostvars['localhost'].retire_labels }}"
       vars:
@@ -133,7 +133,7 @@
 
     - name: Remove the AAP vhost
       ansible.builtin.file:
-        path: "/etc/nginx/conf.d/{{ aap_vm_fqdn }}.conf"
+        path: "/etc/nginx/conf.d/{{ vm_fqdn }}.conf"
         state: absent
       loop: "{{ hostvars['localhost'].retire_labels }}"
       vars:
@@ -144,8 +144,8 @@
     # configuration; its own delete removes all of them.
     - name: Delete the certificate of the AAP name
       ansible.builtin.command:
-        argv: [certbot, delete, --cert-name, "{{ aap_vm_fqdn }}", --non-interactive]
-        removes: "/etc/letsencrypt/live/{{ aap_vm_fqdn }}"
+        argv: [certbot, delete, --cert-name, "{{ vm_fqdn }}", --non-interactive]
+        removes: "/etc/letsencrypt/live/{{ vm_fqdn }}"
       loop: "{{ hostvars['localhost'].retire_labels }}"
       vars:
         autodeploy_deployment_version: "{{ item }}"

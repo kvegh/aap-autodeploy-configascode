@@ -459,7 +459,7 @@ arguments and the CaC templates under loop variables.
 19 November 2026, approved by the user. The CA was added to the AAP host's
 trust store once by hand over SSH (user's permission), so
 `playbooks/aap-host-ca-trust.yml` (commit `0522679`) and the inventory host
-`aap-platform` were never used. Removed both. Future AAPs (WF2) get the shared
+`aap-platform` were never used. Removed both. Future AAPs (AAP deployment) get the shared
 CA through the installer instead; the need recurs there, but not in this form.
 
 ## Reboot check: libvirt daemons need not be running — 2026-11-19
@@ -495,13 +495,13 @@ nor the EE trusted that CA.
   already holds `/etc/pki/ca-trust:/etc/pki/ca-trust:O` (installer value),
   so the planned extra read-only mount of `extracted` was not added.
 - Fewest objects: host 51 — aap-platform in the existing inventory
-  AutoDeploy-NGNG, in no group; WF1 plays target only `autodeploy_target`
-  and `localhost`, so no WF1 job can reach it. Variables
+  AutoDeploy-NGNG, in no group; the hypervisor workflow plays target only `autodeploy_target`
+  and `localhost`, so no hypervisor workflow job can reach it. Variables
   `ca_trust_source_path`, `ca_trust_anchor_name` are its host variables.
 - Not done: the job template and SSH credential. No AAP credential is known
   to hold a key authorized for `aap_service` on the AAP VM; it must be added
   by the user first.
-- Future AAPs (WF2): one shared AutoDeploy CA, certificate plain and key
+- Future AAPs (AAP deployment): one shared AutoDeploy CA, certificate plain and key
   vault-encrypted in the private repository, given to the installer as
   `ca_tls_cert`/`ca_tls_key`; the VM setup trusts it before the installer
   runs. Decided, not implemented; no CA generated.
@@ -540,7 +540,7 @@ implemented 19 November 2026, 06:51 CET (v0.0.37). Implementation commit
   reads `df --output=avail -B1G /opt` instead of matching mount candidates,
   still only when an image is missing (`df` rounds up to whole GiB).
 - Rollout: as before, the AAP inventory gets the new variables only when the
-  CaC is applied; until then WF1 jobs of this version fail on undefined
+  CaC is applied; until then hypervisor workflow jobs of this version fail on undefined
   variables. Job template 204's extra variables were updated in AAP directly
   (only that change), so the CaC apply job itself works before the next apply.
 
@@ -597,7 +597,7 @@ play variable for `/opt/images` in `04-storage.yml` and the shared
 - The private repository now encrypts only real secrets; its non-secret
   values became plain text there (same decision, recorded there).
 - Rollout: the AAP inventory gets the new variables only when the CaC is
-  applied; until then WF1 jobs of this version fail on undefined variables,
+  applied; until then hypervisor workflow jobs of this version fail on undefined variables,
   because the project updates on launch.
 
 Checks: `ansible-lint --profile production --strict` 0 failures, 0
@@ -619,7 +619,7 @@ job template is defined in the private repository's CaC, commit `22b887e`
 - JT 204 — AutoDeploy-NGNG CaC apply runs `playbooks/aap-cac-apply.yml`
   from project AAP AutoDeploy-NGNG in EE ee-proj-aap-cac, inventory
   AutoDeploy-NGNG (holds `localhost` with a local connection), timeout
-  3600 s, no simultaneous runs. Not a WF1 step.
+  3600 s, no simultaneous runs. Not a hypervisor workflow step.
 - Only `cac_repository` (owner/name) is set as an extra variable;
   `cac_usecase` and `cac_repository_ref` keep the playbook defaults.
 - Credentials: GitHub AutoDeploy CaC Secrets-NGNG, AAP API-NGNG and the
@@ -628,14 +628,14 @@ job template is defined in the private repository's CaC, commit `22b887e`
   `env_variables.yml`. The vault credential is not part of the CaC: its value
   would have to be stored in the vault it unlocks.
 
-## WF1 workflow template — 2026-11-19
+## Hypervisor workflow template — 2026-11-19
 
 Requested by the user on 18 November 2026 (CET; exact time not recorded),
 implemented 19 November 2026, 06:05 CET (v0.0.34). Record commit
 `9088373`; no playbook change. The workflow is defined in the private
 repository's CaC, commit `e44b5cf`.
 
-- Workflow 203 — AutoDeploy-NGNG WF1 chains the job templates WF1 00 to 08
+- Workflow 203 (now AutoDeploy-NGNG Hypervisor deploy) chains the job templates 00 to 08
   strictly on success, no failure or always branches: no playbook header asks
   for a cleanup step, and the reinstall stage must never be retried
   automatically. Simultaneous runs are not allowed.
@@ -654,25 +654,25 @@ repository's CaC, commit `e44b5cf`.
   5145, successful) before the workflow was created. The workflow was not
   launched: node 00 erases a live server.
 
-## WF1: login rate limit moves to WF2, storage stage creates /opt/images — 2026-11-19
+## Hypervisor workflow: login rate limit moves to the AAP deployment, storage stage creates /opt/images — 2026-11-19
 
 Decided with the user on 19 November 2026 (CET; exact time not recorded),
 implemented 19 November 2026, 06:00 CET (v0.0.33). Implementation commit
 `7d270c5`. No CaC change; the private repository records the decision too.
 
-- The nginx login rate limit leaves WF1: it protects AAP's login, so it
-  comes with WF2, like starting nginx. `09-web-edge.yml` no longer renders
+- The nginx login rate limit leaves the hypervisor workflow: it protects AAP's login, so it
+  comes with the AAP deployment, like starting nginx. `09-web-edge.yml` no longer renders
   `conf.d/limits.conf`, `templates/limits.conf.j2` is removed, and
   `nginx_rate_limit_zone` / `nginx_rate_limit_rate` are no longer required.
   This closes the open item that these two were not set in the CaC.
   `nginx.conf.j2` never referenced the zone; the remaining base config
   (`nginx.conf`, `00-default.conf`) passes `nginx -t` (nginx 1.24, UBI 9).
-  WF2 must bring back: `/etc/nginx/conf.d/limits.conf` with
+  the AAP deployment must bring back: `/etc/nginx/conf.d/limits.conf` with
   `limit_req_zone $binary_remote_addr zone=<zone>:10m rate=<rate>;` and the
   AAP vhost's `limit_req zone=<zone> burst=<burst> nodelay;` plus
   `limit_req_status 429;` on the login locations, as the old production
-  templates do. A host already set up by an earlier WF1 run keeps its
-  `limits.conf`; WF1 does not delete it.
+  templates do. A host already set up by an earlier hypervisor workflow run keeps its
+  `limits.conf`; the hypervisor workflow does not delete it.
 - The storage stage also creates `/opt/images` as in production: `root`,
   group `libvirt`, mode `2775`, SELinux type `virt_image_t` (label rule and
   directory, in the same two tasks as the pool directories). It is a plain
@@ -704,7 +704,7 @@ commit `ae36704`. No playbook change.
   `aap-cac-apply.yml` and `instance-retire.yml` are unaffected.
 - Older entries below keep the old type name as history.
 
-## WF1 base host trimmed: accounts and all SSH in the bootstrap, nginx installed but not started — 2026-11-18
+## Hypervisor workflow base host trimmed: accounts and all SSH in the bootstrap, nginx installed but not started — 2026-11-18
 
 Decided with the user on 18 November 2026 (CET; exact times not recorded),
 implemented 19 November 2026, 05:50 CET (v0.0.30). Implementation commit
@@ -723,13 +723,13 @@ commit `08561d1` (v0.0.29).
   address on 22 and the managed port plus the bridge during the transition;
   the dual-port proof is unchanged. The bridge sits in firewalld's libvirt
   zone (ssh allowed); the public zone still closes port 22.
-- `aap_hypervisor` leaves WF1 (user, keys, `AllowUsers` entry); it comes with
-  the AAP installation in WF2.
+- `aap_hypervisor` leaves the hypervisor workflow (user, keys, `AllowUsers` entry); it comes with
+  the AAP installation in the AAP deployment.
 - The host setup stages `06-users.yml` and `08-sshd.yml` are removed; the
   other stage files keep their numbers. The host setup has eight stages,
   32 tasks and 5 handlers; the bootstrap has 20 tasks.
 - Web edge: nginx is installed and configured (base config, shared
-  dhparams) but neither enabled nor started; WF2 starts it. The reload
+  dhparams) but neither enabled nor started; the AAP deployment starts it. The reload
   handler is gone (a reload of a stopped unit starts it); `nginx -t` stays.
   The shared basic-auth file (`host_nginx_htpasswd`) is no longer installed:
   the AIOps project, its only user, installs it with its own vhost.
@@ -741,9 +741,9 @@ commit `08561d1` (v0.0.29).
   broken fail2ban on a host where nginx never ran.
 - Reboot and verify: nginx is no longer an expected running service, and the
   check that ports 80 and 443 answer from outside is removed, since nothing
-  listens there until WF2. It has 14 tasks.
+  listens there until the AAP deployment. It has 14 tasks.
 - Open: `nginx_rate_limit_zone` and `nginx_rate_limit_rate` (nginx base
-  `limits.conf`) are still not set in the CaC; a WF1 rerun after WF2 changes
+  `limits.conf`) are still not set in the CaC; a hypervisor workflow rerun after the AAP deployment changes
   the nginx base config without reloading nginx.
 
 Checks: strict ansible-lint (production profile) 0 failures, 0 warnings on
@@ -753,14 +753,14 @@ bootstrap, host setup, web edge and reboot verify playbooks inside
 the CaC in the same EE (accounts, `AllowUsers`, transitional and final
 listen addresses). APME was not rerun. Not executed against a server.
 
-## WF1 job templates named `AutoDeploy-NGNG WF1 NN <step>` — 2026-11-18
+## Hypervisor workflow job templates named `AutoDeploy-NGNG <workflow tag> NN <step>` — 2026-11-18
 
 Decided with the user on 18 November 2026 (CET; exact time not recorded),
 implemented 19 November 2026, 05:42 CET. Version v0.0.29, no playbook change;
 the job templates live in AAP and in private CaC commit `83c18a6` of the
 companion repository.
 
-- One job template per playbook, named `AutoDeploy-NGNG WF1 NN <step>`, NN
+- One job template per playbook, named `AutoDeploy-NGNG <workflow tag> NN <step>`, NN
   the playbook number: 00 Provider reinstall, 01 Deployment version, 02 Host
   DNS publish, 03 Host access bootstrap, 04 RHEL convert, 05 RHEL update,
   06 Host setup, 07 Host reboot verify, 08 Images download.
@@ -829,7 +829,7 @@ CaC commit `9abb493` of the companion repository.
   repository's vault into the private CaC. The source holds no deployment
   version or a name derived from one; the old per-deployment renaming only
   added versioned names at run time and is not carried over.
-- The test server for the WF1 end-to-end run is the test hypervisor; its current AAP
+- The test server for the hypervisor workflow end-to-end run is the test hypervisor; its current AAP
   instance may be erased for it.
 
 Open, not decided: `AllowUsers` is applied in the host setup without its own
@@ -847,9 +847,9 @@ content from Galaxy through the hub's community remote. The list the hub needs
 is `pah_requirements_autodeploy` in the private repository; it is merged into
 the shared hub remotes, never replacing them.
 
-## WF1 credentials carried over from the old repositories — 2026-11-18
+## Hypervisor workflow credentials carried over from the old repositories — 2026-11-18
 
-The remaining WF1 stage secrets were taken unchanged from the frozen old
+The remaining hypervisor workflow stage secrets were taken unchanged from the frozen old
 sources and added to the private `env_variables.yml`: the GoDaddy API token,
 the public DNS zone and host label, and the Red Hat subscription organization
 ID and activation key from the old hypervisor repository, and the AAP API
@@ -1037,7 +1037,7 @@ the 80 GiB check on `/opt` run only if at least one is missing. Before, a
 rerun after a complete download failed, because the downloaded images use
 the 80 GiB the check asks for.
 
-## Old WF1 step 15 dropped — 2026-11-18
+## Old hypervisor workflow step 15 dropped — 2026-11-18
 
 Decided with the user on 18 November 2026. Step 15 of the old host rebuild
 workflow ran the old `playbooks/03-replacement.yml` on its own as the last
@@ -1082,7 +1082,7 @@ bash worker).
   private repository yet.
 - Dropped: the empty-host proof, the restore-manifest resolution, the bash
   worker on the host, job-ID and marker files, both locks, the
-  save-and-reconnect machinery WF1 never used, and `set_stats`, which had no
+  save-and-reconnect machinery the hypervisor workflow never used, and `set_stats`, which had no
   consumer.
 
 ## Instance retire as a separate job, explicit versions only — 2026-11-17
@@ -1175,7 +1175,7 @@ Decided with the user on 17 November 2026.
   port 22 (keys only), creates the `ansible` account (fixed uid, exclusive
   keys, `NOPASSWD` sudo), proves login and sudo as `ansible`, then turns off
   root, password and keyboard-interactive login. Reason: the host is exposed to
-  the internet from the first minute, and the old WF1 ran as root through most
+  the internet from the first minute, and the old hypervisor workflow ran as root through most
   of its run. Everything later runs as `ansible`, the AAP machine credential
   user. `NOPASSWD`, because with key-only access a sudo password adds little
   and would be one more secret to store and inject.
@@ -1264,7 +1264,7 @@ checks first), the EULA acceptance flag (the project's own gate; convert2rhel
 has no such argument, and launching the job template is the decision), the
 subscription registration check (convert2rhel fails if registration fails, and
 the following update stage needs the RHEL repositories anyway), and around a
-hundred task lines of repeated empty-host proofs, VM isolation code WF1 never
+hundred task lines of repeated empty-host proofs, VM isolation code the hypervisor workflow never
 ran, cleanup of files a reinstall had already wiped, and saved-approval logic.
 `infra.convert2rhel` 1.2.1 selects only EL7 and EL8 repositories, so native
 tasks are used.
@@ -1358,7 +1358,7 @@ How the counter job writes it was decided later the same day (see above).
 ## Prove the installation finished by matching host keys — 2026-11-17
 
 Decided with the user on 17 November 2026. The old trust stage
-(`wf1-trust.yml`) and prerequisites stage (`wf1-prerequisites.yml`) were
+(the old trust playbook) and prerequisites stage (the old prerequisites playbook) were
 analysed and dropped entirely, and with them the planned identity stage.
 Standard Ansible and AAP do not pin host keys; AAP jobs run with host key
 checking disabled by default. No known_hosts pinning or key publication is

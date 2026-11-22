@@ -1,29 +1,20 @@
 ---
-# Give a freshly installed AAP its base configuration, through its public URL
-# (Let's Encrypt certificate on the hypervisor's nginx), logged in as the
+# Give a freshly installed AAP its platform configuration, through its public
+# URL (Let's Encrypt certificate on the hypervisor's nginx), logged in as the
 # installer's admin.
 #
 # Order: create this AAP's two Gateway tokens (its own hub, MCP clients) and
 # store them in the private repository's vault, both only when the vault has
 # none for this AAP yet; attach the subscription with a Red Hat service
-# account; apply the base CaC tree of the private repository with the
-# Community of Practice (CoP) collections: hub collection remotes,
-# repositories and distributions (no sync), the deploying AAP's hub registry
-# and the default EE repository, the Git write credential type, the vault,
-# Git write, Galaxy and registry credentials, this AAP's own AAP credential
-# (with its MCP token), the default EE and the Galaxy credentials of
-# organization Default; sync the default EE from the deploying AAP's hub and
-# make it the global default; sync the collections the use case deployer's
-# project needs into this AAP's hub. Last, read the use case deployer tree and
-# apply its inventory, project, job templates and workflows.
+# account; apply the platform CaC tree of the private repository with the
+# Community of Practice (CoP) collections: the Git write credential type, the
+# vault and Git write credentials and this AAP's own AAP credential (with its
+# MCP token). The base content (70-aap-base-content-config.yml) follows and
+# reads the tokens from the vault.
 #
-# Neither tree may live under usecases/: the CaC apply job would apply it to
-# the deploying AAP. The deployer tree is a sibling of the base tree, not
-# inside it: filetree_read searches recursively and would apply the deployer
-# project before its collections are synced. The second filetree_read keeps
-# the facts of the first, so only the deployer's object types are applied.
-# The download stays in the execution environment's scratch directory, which
-# goes away with the job.
+# The tree may not live under usecases/: the CaC apply job would apply it to
+# the deploying AAP. The download stays in the execution environment's
+# scratch directory, which goes away with the job.
 #
 # Rerunnable: tokens are created once per AAP (the vault entry is the record);
 # the rest converges. Retiring an instance removes its vault entry.
@@ -38,10 +29,8 @@
 #                                   private repository, ref (also the branch
 #                                   the vault is written to) and use case whose
 #                                   env_variables.yml is the vault file
-#   aap_base_cac_dir                base CaC tree in the private repository
-#   aap_deployer_cac_dir            use case deployer tree in the private
-#                                   repository
-#   aap_vm_name, aap_vm_fqdn        AAP VM name (the vault key) and AAP name
+#   aap_platform_cac_dir            platform CaC tree in the private repository
+#   vm_name, vm_fqdn                AAP VM name (the vault key) and AAP name
 #   aap_base_user                   login and token owner; its password is the
 #                                   installer's admin password
 # From the vault (env_variables.yml): vaulted_aap_installer
@@ -49,15 +38,15 @@
 # _secret, vaulted_cac_vault_password (to write the vault), the secrets the
 # tree refers to, and vaulted_aap_instance_tokens (written here: per AAP VM
 # name, hub and mcp).
-# Given to the trees: aap_base_tokens (hub, mcp), cac_scratch (the download).
+# Given to the tree: aap_base_tokens (hub, mcp).
 
-- name: Configure the base of the new AAP
+- name: Configure the platform of the new AAP
   hosts: localhost
   connection: local
   gather_facts: false
   become: false
   vars:
-    aap_hostname: "https://{{ aap_vm_fqdn }}"
+    aap_hostname: "https://{{ vm_fqdn }}"
     aap_username: "{{ aap_base_user }}"
     aap_password: "{{ vaulted_aap_installer.gateway_admin_password }}"
     aap_validate_certs: true
@@ -68,21 +57,20 @@
     aap_configuration_secure_logging: true
     aap_configuration_async_dir: /tmp/.ansible_async  # empty default broke async_status ("could not find job") on ansible-core 2.20
     controller_configuration_filetree_read_layout: create
-    dir_orgs_vars: "{{ cac_scratch.path }}/{{ aap_base_cac_dir }}"
+    dir_orgs_vars: "{{ cac_scratch.path }}/{{ aap_platform_cac_dir }}"
     redhat_subscription_client_id: "{{ vaulted_redhat_subscription_client_id }}"
     redhat_subscription_client_secret: "{{ vaulted_redhat_subscription_client_secret }}"
-    aap_base_vault_path: "usecases/{{ cac_usecase }}/env_variables.yml"
+    aap_platform_vault_path: "usecases/{{ cac_usecase }}/env_variables.yml"
     aap_base_tokens: >-
-      {{ {'hub': aap_base_hub_token.token, 'mcp': aap_base_mcp_token.token}
-         if aap_base_hub_token is changed
-         else vaulted_aap_instance_tokens[aap_vm_name] }}
+      {{ {'hub': aap_platform_hub_token.token, 'mcp': aap_platform_mcp_token.token}
+         if aap_platform_hub_token is changed
+         else vaulted_aap_instance_tokens[vm_name] }}
   module_defaults:
     group/ansible.controller.controller: &aap_login
       aap_hostname: "{{ aap_hostname }}"
       aap_username: "{{ aap_username }}"
       aap_password: "{{ aap_password }}"
       aap_validate_certs: "{{ aap_validate_certs }}"
-    group/ansible.hub.hub: *aap_login
     # Without it, ansible.platform's action plugins read the login from the
     # raw, untemplated play variables.
     group/ansible.platform.gateway: *aap_login
@@ -92,29 +80,29 @@
 
     - name: Load the vault values
       ansible.builtin.include_vars:
-        file: "{{ cac_scratch.path }}/{{ aap_base_vault_path }}"
+        file: "{{ cac_scratch.path }}/{{ aap_platform_vault_path }}"
       no_log: true
 
     - name: Create this AAP's tokens and store them in the vault
-      when: aap_vm_name not in vaulted_aap_instance_tokens | default({})
+      when: vm_name not in vaulted_aap_instance_tokens | default({})
       block:
         - name: Create the Gateway token for this AAP's own hub
           ansible.platform.token:
             description: Galaxy and registry credentials for this AAP's own hub
             scope: read
-          register: aap_base_hub_token
+          register: aap_platform_hub_token
           no_log: true
 
         - name: Create the Gateway token for MCP clients
           ansible.platform.token:
             description: MCP clients
             scope: write
-          register: aap_base_mcp_token
+          register: aap_platform_mcp_token
           no_log: true
 
         - name: Read the vault file and its blob SHA
           ansible.builtin.uri:
-            url: "https://api.github.com/repos/{{ cac_repository }}/contents/{{ aap_base_vault_path }}?ref={{ cac_repository_ref }}"
+            url: "https://api.github.com/repos/{{ cac_repository }}/contents/{{ aap_platform_vault_path }}?ref={{ cac_repository_ref }}"
             url_username: "{{ counter_git_username }}"
             url_password: "{{ counter_git_token }}"
             force_basic_auth: true
@@ -122,14 +110,14 @@
               Accept: application/vnd.github+json
               X-GitHub-Api-Version: "2022-11-28"
             timeout: 30
-          register: aap_base_vault_file
+          register: aap_platform_vault_file
 
         # Decrypted with the vault password from the vault itself, the key of
         # this AAP added, encrypted again. Comments in the file are lost; the
         # blob SHA makes GitHub reject the write if the file changed meanwhile.
         - name: Write the tokens into the vault file
           ansible.builtin.uri:
-            url: "https://api.github.com/repos/{{ cac_repository }}/contents/{{ aap_base_vault_path }}"
+            url: "https://api.github.com/repos/{{ cac_repository }}/contents/{{ aap_platform_vault_path }}"
             method: PUT
             url_username: "{{ counter_git_username }}"
             url_password: "{{ counter_git_token }}"
@@ -139,21 +127,21 @@
               X-GitHub-Api-Version: "2022-11-28"
             body_format: json
             body:
-              message: "Store the tokens of {{ aap_vm_name }}"
+              message: "Store the tokens of {{ vm_name }}"
               branch: "{{ cac_repository_ref }}"
-              sha: "{{ aap_base_vault_file.json.sha }}"
+              sha: "{{ aap_platform_vault_file.json.sha }}"
               content: >-
-                {{ aap_base_vault_file.json.content | b64decode
+                {{ aap_platform_vault_file.json.content | b64decode
                 | ansible.builtin.unvault(vaulted_cac_vault_password, vault_id='cac')
                 | from_yaml
-                | combine({'vaulted_aap_instance_tokens': {aap_vm_name: aap_base_tokens}}, recursive=true)
+                | combine({'vaulted_aap_instance_tokens': {vm_name: aap_base_tokens}}, recursive=true)
                 | to_nice_yaml
                 | ansible.builtin.vault(vaulted_cac_vault_password, vault_id='cac')
                 | b64encode }}
             timeout: 30
           changed_when: true
 
-    - name: Load the subscription settings of the base tree
+    - name: Load the subscription settings of the platform tree
       ansible.builtin.include_vars:
         file: "{{ dir_orgs_vars }}/controller_license.yaml"
 
@@ -161,62 +149,10 @@
       ansible.builtin.include_role:
         name: infra.aap_configuration.controller_license
 
-    - name: Read the base tree
+    - name: Read the platform tree
       ansible.builtin.include_role:
         name: infra.aap_configuration_extended.filetree_read
 
-    - name: Apply the base tree
+    - name: Apply the platform tree
       ansible.builtin.include_role:
         name: infra.aap_configuration.dispatch
-
-    # The CoP sync role stops waiting after about 50 s.
-    - name: Sync the EE repositories from their registries
-      ansible.hub.ah_ee_repository_sync:
-        name: "{{ item.name }}"
-        wait: true
-        timeout: "{{ item.timeout }}"
-      loop: "{{ hub_ee_repositories }}"
-      loop_control:
-        label: "{{ item.name }}"
-
-    # The tree's only EE is the default; the setting takes its id.
-    - name: Look up the default EE
-      ansible.controller.execution_environment:
-        name: "{{ controller_execution_environments[0].name }}"
-        state: exists
-      register: aap_base_default_ee
-
-    - name: Make it the global default EE
-      ansible.controller.settings:
-        name: DEFAULT_EXECUTION_ENVIRONMENT
-        value: "{{ aap_base_default_ee.id }}"
-
-    # What the deployer project's sync needs; the CoP sync role would stop
-    # waiting after about 50 s here too.
-    - name: Sync the collection repositories from their remotes
-      ansible.hub.collection_repository_sync:
-        name: "{{ item.name }}"
-        wait: true
-        timeout: "{{ item.timeout }}"
-      loop: "{{ hub_collection_repositories }}"
-      loop_control:
-        label: "{{ item.name }}"
-
-    - name: Read the use case deployer tree
-      ansible.builtin.include_role:
-        name: infra.aap_configuration_extended.filetree_read
-      vars:
-        dir_orgs_vars: "{{ cac_scratch.path }}/{{ aap_deployer_cac_dir }}"
-
-    # The project's first sync installs its collections (about 6 min on v30);
-    # the CoP wait (50 polls) at 15 s per poll covers 750 s.
-    - name: Apply the use case deployer tree
-      ansible.builtin.include_role:
-        name: infra.aap_configuration.dispatch
-      vars:
-        controller_configuration_projects_async_delay: 15
-        aap_configuration_dispatcher_roles:
-          - {role: controller_inventories, var: controller_inventories, tags: inventories}
-          - {role: controller_projects, var: controller_projects, tags: projects}
-          - {role: controller_job_templates, var: controller_templates, tags: job_templates}
-          - {role: controller_workflow_job_templates, var: controller_workflows, tags: workflow_job_templates}

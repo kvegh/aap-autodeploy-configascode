@@ -3,13 +3,13 @@
 # certbot for its certificates, fail2ban to ban abusers.
 #
 # Base only. nginx is installed and configured but neither enabled nor
-# started: the AAP deployment (WF2) starts it. fail2ban runs with the sshd
+# started: the AAP deployment starts it. fail2ban runs with the sshd
 # jail only. Every use case brings its own nginx vhost (conf.d), certificate,
 # basic-auth file and fail2ban jails for its nginx logs (jail.d). Use case
 # vhosts reference the shared /etc/letsencrypt/ssl-dhparams.pem and must not
 # include certbot's options-ssl-nginx.conf, which is not installed. The AAP
 # login rate limit (limit_req_zone and the vhost's limit_req) protects AAP's
-# login, so it comes with WF2, not here.
+# login, so it comes with the AAP deployment, not here.
 #
 # Required variables, from the CaC inventory:
 #   host_web_edge_packages   nginx, certbot and fail2ban packages

@@ -44,6 +44,31 @@ This repository keeps what the old one proved and drops the rest.
   AutoDeploy-NGNG. Playbooks carry no defaults for configuration values: a
   missing value fails where it is used. Secrets come from AAP credentials.
 
+### Parts
+
+Seven parts, two workflows. Playbooks are `PS-<subject>-<action>.yml` and
+job templates `AutoDeploy-NGNG PS <what>`, where P is the part and S the
+order inside it.
+
+| Part | Playbooks (job template number) |
+|---|---|
+| 1 Hypervisor install | `10-provider-reinstall`, `11-dns-record-publish`, `12-hypervisor-access-bootstrap`, `13-rhel-convert`, `14-rhel-update` |
+| 2 Hypervisor OS config | `20-hypervisor-setup` (stages in `playbooks/hypervisor/`), `21-hypervisor-reboot-verify`, `22-images-download` |
+| 3 AAP VM deploy | `30-deployment-version-assign`, `31-aap-vm-create` |
+| 4 AAP VM OS config | `40-aap-vm-os-config` |
+| 5 AAP software deployment | `11-dns-record-publish` with the AAP name (50), `51-aap-certificate-request`, `52-aap-install` |
+| 6 AAP platform config | `60-aap-platform-config` |
+| 7 AAP base content config | `70-aap-base-content-config`, ending with the use case deployer |
+
+Workflow "AutoDeploy-NGNG Hypervisor deploy" runs parts 1–2 (10 → 22,
+behind the erase confirmation survey), once per hypervisor. Workflow
+"AutoDeploy-NGNG AAP deploy" runs parts 3–7 (30 → 70, survey
+`deployment_version`), once per AAP instance. Data passes between parts only
+through the version artifact `autodeploy_deployment_version`, the AAP
+inventory AutoDeploy-NGNG and the private vault (part 6 stores the new AAP's
+tokens, part 7 reads them). Parts 3–4 use generic `vm_` variables; the AAP
+values sit in the CaC.
+
 ### Status
 
 Refactored, reviewed and committed:
@@ -61,8 +86,10 @@ Refactored, reviewed and committed:
 | Image download | 68 | 9 |
 | AAP VM create | about 147 | 8 |
 | AAP DNS and certificate | about 50 | 2 (DNS reuses the host DNS stage) |
-| AAP install | 49 | 30 (18 + snapshot and download task files) + 3 handlers, plus the RHEL update stage |
-| AAP base config | about 300 (74 + about 230 in task files) | 13 + download task file |
+| AAP VM OS config | part of AAP install | 7 + snapshot task file + 1 handler, plus the RHEL update stage |
+| AAP install | 49 | 11 + snapshot and download task files + 2 handlers |
+| AAP platform config | part of AAP base config | 10 + download task file |
+| AAP base content config | about 300 (74 + about 230 in task files) | 10 + download task file |
 | Instance retire | 69 | 12 + 1 handler |
 
 The reinstall stage removes `ansible_port` from the target's AAP inventory
@@ -107,7 +134,7 @@ temporary root-only credentials and proves the running kernel is Red Hat's.
 
 The RHEL update stage updates all packages and reboots if anything changed.
 
-The host setup (`06-host-setup.yml`) runs eight stages from `playbooks/host/`:
+The hypervisor setup (`20-hypervisor-setup.yml`) runs eight stages from `playbooks/hypervisor/`:
 base (EPEL, names, timezone, admin tools, hardware monitors), virtualization,
 SELinux (permissive), VM storage (the pool directories and the plain image
 directory `/opt/images`, `root:libvirt` 2775), libvirt networks, firewall
@@ -115,19 +142,19 @@ directory `/opt/images`, `root:libvirt` 2775), libvirt networks, firewall
 their numbers; 06 (users) and 08 (SSH) moved into the host access bootstrap.
 fail2ban never bans our own public addresses. File templates live in the
 public repository; their values come from the private repository's CaC. nginx is installed and configured but neither enabled nor started;
-the AAP deployment (WF2) starts it and brings the AAP login rate limit
+the AAP deployment starts it and brings the AAP login rate limit
 (`limit_req_zone` in `conf.d`, used by the AAP vhost). fail2ban runs with the
 sshd jail only.
 Use cases add their own nginx vhosts, basic-auth files and fail2ban jails for
 their nginx logs.
 
-The reboot and verify stage (`07-host-reboot-verify.yml`) reboots the finished
+The reboot and verify stage (`21-hypervisor-reboot-verify.yml`) reboots the finished
 host and proves that the host setup survives a boot: SELinux mode, services
 running and enabled, the certificate renewal timer, libvirt networks and
 storage pools in their configured state with autostart, sysctl and KSM values,
 then from outside: port 22 is closed on the public address and a real root
 login on the managed port is refused. The web ports are not checked, since
-nginx runs only after WF2. It runs as the automation account on the inventory port with no
+nginx runs only after the AAP deployment. It runs as the automation account on the inventory port with no
 fallback to port 22 or root. The old workflow ran a separate verify before
 the reboot as well; it is dropped, since the host access bootstrap proves
 login and sudo itself and only the run after the reboot shows something new.
@@ -154,7 +181,7 @@ certificates, AAP inventory entries, generated secrets, monitoring) adds its
 own cleanup step to this job when it is built. Removing the Red Hat
 registration is a planned follow-up that needs a Red Hat API token.
 
-The image download stage (`08-images-download.yml`) runs as the automation
+The image download stage (`22-images-download.yml`) runs as the automation
 account on the inventory port. If at least one image of the CaC list is
 missing, it first requires the configured free space (`images_min_free_gib`)
 on `/opt`, read with `df`; with every image present the check is skipped, so a
@@ -171,18 +198,18 @@ directories, their SELinux label and owner come from the storage stage, and
 libvirt takes over a VM's disks when it starts. The image list and its
 checksums are required CaC in the private repository.
 
-The AAP VM stage (`09-aap-vm-create.yml`), the first step of the AAP
-deployment, copies the golden image `aap_vm_base_image` into the vms pool,
+The AAP VM stage (`31-aap-vm-create.yml`), the first step of the AAP
+deployment, copies the golden image `vm_base_image` into the vms pool,
 grows it with `qemu-img resize` and prepares it offline with `virt-customize`:
-the FQDN `aap_vm_fqdn` (`aap27.vXY.<zone>`, the AAP version from the CaC) as
+the FQDN `vm_fqdn` (`aap27.vXY.<zone>`, the AAP version from the CaC) as
 host name, the automation account with exactly its declared keys and its sudo
 rule, an empty machine-id, `subscription-manager clean` and a SELinux
 relabel. No cloud-init. `community.libvirt.virt_install` then imports it as
-`aap_vm_name` (`aap27-vXY`) with the CaC sizes, the RHEL 9 OS type (virtio),
+`vm_name` (`aap27-vXY`) with the CaC sizes, the RHEL 9 OS type (virtio),
 autostart and the fixed MAC of the reservation `aap` in
 `net_internal.reservations`. Once the VM is defined, a rerun touches neither
-the disk nor the VM. It then records the VM as host `aap_vm_name` in the AAP
-inventory with the host variables of the CaC dict `aap_vm_connection`
+the disk nor the VM. It then records the VM as host `vm_name` in the AAP
+inventory with the host variables of the CaC dict `vm_connection`
 (`ansible_host` from the reservation `aap`, `ansible_fqdn`, and
 `ansible_ssh_common_args` with a ProxyCommand through the hypervisor's managed
 port), adds it to the run with `add_host` from the same dict, waits for the
@@ -191,11 +218,11 @@ covers both hops. The filesystem is grown in the installation stage. The
 instance retire job removes the VM, its disk and its inventory host. Only the
 first AAP VM (fixed reservation) is built; further VMs are future work.
 
-The AAP name `aap_vm_fqdn` is published by the host DNS stage itself:
-`02-host-dns-publish.yml` runs unchanged under its own job template, whose
+The AAP name `vm_fqdn` is published by the host DNS stage itself:
+`11-dns-record-publish.yml` runs unchanged under its own job template, whose
 extra variables set `host_dns_record` and `host_fqdn` to the AAP name. The
 record points to the hypervisor's public address, like the host name.
-`10-aap-certificate-request.yml` then enables and starts nginx on the
+`51-aap-certificate-request.yml` then enables and starts nginx on the
 hypervisor (the web edge stage left it stopped) and runs `certbot certonly
 --webroot` for the AAP name into the web edge stage's webroot
 `/var/lib/letsencrypt`, with the account address `host_certbot_email` from the
@@ -209,29 +236,31 @@ made libvirt depend on that firewall, which the new design does not want.
 The old `aap.yml` dispatcher, which every job template ran first, is dropped
 as well: each job template points directly at its own playbook.
 
-The installation stage (`11-aap-install.yml`) takes the deployment version as
-an extra variable and targets the VM's inventory host
+The VM OS configuration stage (`40-aap-vm-os-config.yml`) takes the
+deployment version as an extra variable and targets the VM's inventory host
 (`aap*-<version>`) and the hypervisor group. It registers the VM with `rhc`
 (the activation key of the conversion stage, no AAP repository), updates it
-by importing `05-rhel-update.yml` with `rhel_update_hosts` set to the VM's
+by importing `14-rhel-update.yml` with `rhel_update_hosts` set to the VM's
 host pattern, takes a cold libvirt snapshot (shut down,
 `virsh snapshot-create-as`, start, wait for SSH; names from
-`aap_vm_snapshot_names`; a rerun skips an existing snapshot without shutting
+`vm_snapshot_names`; a rerun skips an existing snapshot without shutting
 the VM down), adds the shared AutoDeploy CA to the
 VM's trust store, grows the root partition and XFS, resolves the AAP name to
-the VM in `/etc/hosts` and installs `ansible-core`. It downloads the private
+the VM in `/etc/hosts` and installs `ansible-core`. No vault is needed.
+
+The installation stage (`52-aap-install.yml`) downloads the private
 repository with the GitHub credential (task file shared with the CaC apply
 job), decrypts the installer secrets (`vaulted_aap_installer`) with the vault
 credential, renders the installer inventory (growth topology, bundle install,
 MCP server, `ca_tls_cert`/`ca_tls_key` from the shared CA, no hub seeding)
 into the bundle directory and runs the containerized installer as
 `aap_install_user`. A Gateway ping on the VM against the shared CA proves the
-install. A second cold snapshot follows, then the hypervisor gets the AAP
+install. The cold snapshot after the install follows, then the hypervisor gets the AAP
 vhost (Let's Encrypt certificate, upstream verified with the shared CA, login
 rate limit; `nginx -t` before the reload), and a ping of the public URL proves
 the path end to end.
 
-The base configuration stage (`12-aap-base-config.yml`) runs on the deploying
+The platform configuration stage (`60-aap-platform-config.yml`) runs on the deploying
 AAP's execution environment against the new AAP's public URL, logged in as
 `aap_base_user` (admin) with the installer's admin password from the vault.
 When the vault has no tokens for the AAP VM yet, it creates two Gateway
@@ -241,20 +270,23 @@ with the vault password kept in the vault itself, the AAP's key added under
 `vaulted_aap_instance_tokens`, encrypted again, sent with the blob SHA. It
 attaches the subscription with the CoP role `controller_license` (Red Hat
 service account, filter from the CaC), then reads the private repository's
-base tree (`aap_base_cac_dir`, outside `usecases/` so the CaC apply job never
-applies it to the deploying AAP) with `filetree_read` and applies it with
-`dispatch`: collection remotes rh-certified, validated and community with
+platform tree (`aap_platform_cac_dir`, outside `usecases/` so the CaC apply
+job never applies it to the deploying AAP) with `filetree_read` and applies it
+with `dispatch`: the Git write credential type, the vault and Git write
+credentials and the AAP's own API credential with its MCP token.
+
+The base content stage (`70-aap-base-content-config.yml`) logs in the same
+way, takes the AAP's tokens from the vault and applies the base content tree
+(`aap_base_content_cac_dir`): collection remotes rh-certified, validated and community with
 their repositories and distributions (no sync), the deploying AAP's hub as an
-anonymous container registry and the repository of the default EE, the Git
-write credential type, the vault, Git write, three Galaxy and one registry
-credential on the AAP's own hub, the default EE pinned by digest, and the
-Galaxy credentials of organization Default, and the AAP's own API credential
-with its MCP token. Then it syncs the EE repository itself (the CoP sync role
+anonymous container registry and the repository of the default EE, three
+Galaxy and one registry credential on the AAP's own hub, the default EE pinned
+by digest, and the Galaxy credentials of organization Default. Then it syncs the EE repository itself (the CoP sync role
 stops waiting after about 50 s), sets `DEFAULT_EXECUTION_ENVIRONMENT` and
 syncs the three collection repositories, whose remotes carry requirements
 files with exactly the collections the deployer project needs
 (`collections/requirements.yml` plus dependencies). Last, it reads the use
-case deployer tree (`aap_deployer_cac_dir`, a sibling of the base tree) and
+case deployer tree (`aap_deployer_cac_dir`, a sibling of the content tree) and
 applies only its inventory, project, job templates and workflows; the
 project's first sync installs the collections from the new hub (about 6 min).
 Route timeouts keep their defaults.
@@ -278,21 +310,22 @@ The web edge's port-80 catch-all serves `/.well-known/acme-challenge/` from
 the certbot webroot for every name and answers everything else with 444, so
 Let's Encrypt issuance and renewal need no per-name port-80 server.
 
-Not yet started: the stages after the AAP base configuration. Nothing here has run
-against a real server yet. The old repositories remain the working implementation until a
-stage has been proven here.
+Both workflows have run end to end from bare metal on the test hypervisor
+(v30 on 22 November 2026, before the restructure into parts).
 
 ## Conventions
 
-- Playbooks are `NN-subject-action.yml`, numbered in execution order. Jobs
-  outside the deployment workflow, started by hand, are unnumbered
+- Playbooks are `PS-subject-action.yml` (part, order inside the part; see
+  Parts). A playbook reused by a later part keeps its number; the reusing job
+  template gets its own. Jobs outside the deployment workflows, started by
+  hand, are unnumbered
   (`instance-retire.yml`, `aap-cac-apply.yml`), and so are the use case
   deployer's (`usecase-*.yml`).
 - Variables use `snake_case` with a prefix naming their source: `robot_` for
   provider API inputs and confirmations, `provider_` for values this automation
   derives at run time, `counter_` for the deployment counter, `dns_` for the host DNS stage, `rhsm_` for subscription inputs,
   `host_` for host configuration, `aap_` for the AAP inventory the stages
-  update, `aap_vm_` for the AAP VM, `retire_` for the instance retire job, `cac_` for the CaC apply
+  update, `vm_` for the VM of parts 3–4 (generic names, AAP values in the CaC), `retire_` for the instance retire job, `cac_` for the CaC apply
   job, `usecase_` for the use case deployer. Variables the CoP roles define keep their CoP names (`dir_orgs_vars`,
   `aap_hostname`). Registered
   values carry the stage name, for example `rhel_convert_`. Values published
@@ -314,10 +347,10 @@ assertions are read-only and safe to run at any time.
 ## Layout
 
     playbooks/                one playbook per stage
-    playbooks/host/           host setup stages, imported by 06-host-setup.yml
-    playbooks/host/templates/ file templates, structure only (values come from the
+    playbooks/hypervisor/     hypervisor setup stages, imported by 20-hypervisor-setup.yml
+    playbooks/hypervisor/templates/ file templates, structure only (values come from the
                               private repo's CaC)
-    playbooks/host/files/     static files (public, no secrets)
+    playbooks/hypervisor/files/ static files (public, no secrets)
     playbooks/tasks/          task files imported by more than one play
     playbooks/templates/      file templates of the AAP stages
     collections/  collection requirements
@@ -363,7 +396,7 @@ What the job template needs (in AAP: "AutoDeploy-NGNG CaC apply"):
   certificate the AAP installer's own CA signed. The AAP host's RHEL trusts
   that CA (added once by hand on 2026-11-19), and AAP's job setting "Paths to
   expose to isolated jobs" mounts the host's `/etc/pki/ca-trust` into every
-  job container, so the EE trusts it too. Future AAPs (WF2) get one shared
+  job container, so the EE trusts it too. Future AAPs (AAP deploy workflow) get one shared
   AutoDeploy CA through the installer (decided, not built).
 
 Command line example:
@@ -384,8 +417,8 @@ Command line example:
 | Syntax check inside the AAP EE (ansible-core 2.20.10, Python 3.12.15, image `ee-proj-aap-cac@sha256:e6451a10…`) | pass, no deprecation warnings |
 | `reset_type: hardware` valid in community.hrobot 2.8.0 | yes (`software`, `hardware`, `power`, `manual`) |
 | APME (commit `9c4372f`, core 2.20; native, opa and ansible validators) | no defects; one lead open, deviations accepted below |
-| Executed against a real server | not done |
-| AAP job templates, workflow and end-to-end test | WF1 00–08 job templates, the workflow "AutoDeploy-NGNG WF1" and the job template "AutoDeploy-NGNG CaC apply" exist in AAP and the CaC; deployment version run successful; workflow and other templates not run, no end-to-end test yet |
+| Executed against a real server | both workflows end to end on the test hypervisor (v30, 22 November 2026) |
+| AAP job templates and workflows | all parts' job templates, both workflows and the job template "AutoDeploy-NGNG CaC apply" exist in AAP and the CaC |
 
 Accepted APME deviations:
 

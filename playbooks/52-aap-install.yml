@@ -1,41 +1,36 @@
 ---
-# Install AAP on the AAP VM of a deployment version and publish it through
-# the hypervisor's nginx.
+# Install AAP on the prepared VM of a deployment version and publish it
+# through the hypervisor's nginx.
 #
-# Order: register the VM with Red Hat; update it with the RHEL update stage
-# (05-rhel-update.yml, reboot if anything changed); cold snapshot 1; trust the shared
-# AutoDeploy CA, grow the root partition and XFS, resolve the AAP name
-# locally, install ansible-core; run the containerized installer from the
-# setup bundle in the golden image with an inventory rendered from this
-# repository, prove the Gateway answers on the VM; cold snapshot 2; write the
-# AAP vhost on the hypervisor and prove the public URL answers through it.
+# Order: run the containerized installer from the setup bundle in the golden
+# image with an inventory rendered from this repository, prove the Gateway
+# answers on the VM; cold snapshot after the install; write the AAP vhost on
+# the hypervisor and prove the public URL answers through it. The VM OS
+# configuration (40-aap-vm-os-config.yml) ran before: registration, update,
+# snapshot before the install, CA trust, root filesystem, packages.
 #
-# The VM's plays target its AAP inventory host, which the AAP VM stage
-# recorded as aap<AAP version>-<deployment version>; the hypervisor's plays
-# target autodeploy_target. The installer secrets come from the private
-# repository's vault file, downloaded at run time and decrypted with the vault
-# credential. The download stays in the execution environment's scratch
-# directory, which goes away with the job.
+# The VM's plays target its AAP inventory host aap<AAP version>-<deployment
+# version>; the hypervisor's plays target autodeploy_target. The installer
+# secrets come from the private repository's vault file, downloaded at run
+# time and decrypted with the vault credential. The download stays in the
+# execution environment's scratch directory, which goes away with the job.
 #
-# Rerunnable: the installer is designed to be rerun; existing snapshots are
-# kept and the VM is not shut down for them again.
+# Rerunnable: the installer is designed to be rerun; an existing snapshot is
+# kept and the VM is not shut down for it again.
 #
-# Credentials: the hypervisor's machine credential (both SSH hops), Red Hat
-# Subscription-NGNG (rhsm_org_id, rhsm_activation_key), GitHub AutoDeploy
-# CaC Secrets-NGNG (counter_git_username, counter_git_token) and the vault
-# credential of the private repository.
+# Credentials: the hypervisor's machine credential (both SSH hops), GitHub
+# AutoDeploy CaC Secrets-NGNG (counter_git_username, counter_git_token) and
+# the vault credential of the private repository.
 #
 # Required variables, from the job template, the workflow or the CaC inventory:
 #   autodeploy_deployment_version   deployment version, for example v29
 #   cac_repository, cac_repository_ref, cac_usecase
 #                                   private repository, ref and use case whose
 #                                   env_variables.yml holds the vault values
-#   aap_vm_name, aap_vm_fqdn        VM / inventory host name and AAP name
-#   aap_vm_connection               VM host variables; ansible_host is its address
-#   aap_vm_snapshot_names           dict: before_install, after_install
-#   aap_vm_shutdown_timeout         seconds the guest may take to power off
-#   aap_vm_root_disk, aap_vm_root_partition   root disk and partition number
-#   aap_vm_packages                 packages the installer needs
+#   vm_name, vm_fqdn                VM / inventory host name and AAP name
+#   vm_connection                   VM host variables; ansible_host is its address
+#   vm_snapshot_names               dict: before_install, after_install
+#   vm_shutdown_timeout             seconds the guest may take to power off
 #   aap_install_user                owner of the setup bundle, runs the installer
 #   aap_installer_dir               setup bundle directory in the golden image
 #   aap_installer_timeout           seconds the installer may run
@@ -57,83 +52,6 @@
   tasks:
     - name: Download the private repository
       ansible.builtin.import_tasks: tasks/private-repository-download.yml
-
-- name: Register the AAP VM with Red Hat
-  hosts: "aap*-{{ autodeploy_deployment_version }}"
-  become: true
-  gather_facts: false
-  tasks:
-    - name: Register with the activation key
-      ansible.builtin.include_role:
-        name: redhat.rhel_system_roles.rhc
-      vars:
-        rhc_auth:
-          activation_keys:
-            keys:
-              - "{{ rhsm_activation_key }}"
-        rhc_organization: "{{ rhsm_org_id }}"
-
-- name: Update the AAP VM to the latest packages
-  ansible.builtin.import_playbook: 05-rhel-update.yml
-  vars:
-    rhel_update_hosts: "aap*-{{ autodeploy_deployment_version }}"
-
-- name: Take the cold snapshot before the AAP install
-  hosts: autodeploy_target
-  become: true
-  gather_facts: false
-  tasks:
-    - name: Snapshot the AAP VM
-      ansible.builtin.import_tasks: tasks/aap-vm-cold-snapshot.yml
-      vars:
-        aap_vm_snapshot: "{{ aap_vm_snapshot_names.before_install }}"
-
-- name: Prepare the AAP VM for the installer
-  hosts: "aap*-{{ autodeploy_deployment_version }}"
-  become: true
-  gather_facts: false
-  handlers:
-    # No module rebuilds the RHEL trust store.
-    - name: Rebuild the trust store
-      ansible.builtin.command:
-        argv: [update-ca-trust]
-      changed_when: true
-  tasks:
-    - name: Trust the shared AutoDeploy CA
-      ansible.builtin.copy:
-        content: "{{ autodeploy_ca_cert }}"
-        dest: /etc/pki/ca-trust/source/anchors/autodeploy-ca.crt
-        owner: root
-        group: root
-        mode: "0644"
-      notify: Rebuild the trust store
-
-    # No module grows a partition. growpart answers NOCHANGE with rc 1 when
-    # the partition already fills the disk.
-    - name: Grow the root partition to the end of the disk
-      ansible.builtin.command:
-        argv: [growpart, "{{ aap_vm_root_disk }}", "{{ aap_vm_root_partition }}"]
-      register: aap_install_growpart
-      changed_when: aap_install_growpart.rc == 0
-      failed_when: aap_install_growpart.rc != 0 and 'NOCHANGE' not in aap_install_growpart.stdout
-
-    - name: Grow the root XFS filesystem to the partition
-      community.general.filesystem:
-        dev: "{{ aap_vm_root_disk }}{{ aap_vm_root_partition }}"
-        fstype: xfs
-        resizefs: true
-
-    # Public DNS points the AAP name at the hypervisor; on the VM it must
-    # resolve to the VM itself.
-    - name: Resolve the AAP name to the VM
-      ansible.builtin.lineinfile:
-        path: /etc/hosts
-        line: "{{ aap_vm_connection.ansible_host }} {{ aap_vm_fqdn }} {{ aap_vm_name }}"
-
-    - name: Install the installer's packages
-      ansible.builtin.dnf:
-        name: "{{ aap_vm_packages }}"
-        state: present
 
 - name: Install AAP
   hosts: "aap*-{{ autodeploy_deployment_version }}"
@@ -174,7 +92,7 @@
 
     - name: Prove the Gateway answers on the VM with the shared AutoDeploy CA
       ansible.builtin.uri:
-        url: "https://{{ aap_vm_fqdn }}/api/gateway/v1/ping/"
+        url: "https://{{ vm_fqdn }}/api/gateway/v1/ping/"
         ca_path: "{{ aap_installer_ca_cert }}"
 
 - name: Snapshot the installed AAP and publish it on the hypervisor
@@ -195,10 +113,10 @@
         name: nginx
         state: reloaded
   tasks:
-    - name: Snapshot the AAP VM
-      ansible.builtin.import_tasks: tasks/aap-vm-cold-snapshot.yml
+    - name: Snapshot the VM
+      ansible.builtin.import_tasks: tasks/vm-cold-snapshot.yml
       vars:
-        aap_vm_snapshot: "{{ aap_vm_snapshot_names.after_install }}"
+        vm_snapshot: "{{ vm_snapshot_names.after_install }}"
 
     - name: Install the shared AutoDeploy CA for upstream verification
       ansible.builtin.copy:
@@ -228,7 +146,7 @@
     - name: Write the AAP vhost
       ansible.builtin.template:
         src: templates/aap-vhost.conf.j2
-        dest: "/etc/nginx/conf.d/{{ aap_vm_fqdn }}.conf"
+        dest: "/etc/nginx/conf.d/{{ vm_fqdn }}.conf"
         owner: root
         group: root
         mode: "0644"
@@ -245,7 +163,7 @@
   tasks:
     - name: Ping the Gateway at its public URL
       ansible.builtin.uri:
-        url: "https://{{ aap_vm_fqdn }}/api/gateway/v1/ping/"
+        url: "https://{{ vm_fqdn }}/api/gateway/v1/ping/"
       register: aap_install_public_ping
       until: aap_install_public_ping.status == 200
       retries: "{{ aap_public_ping_retries }}"

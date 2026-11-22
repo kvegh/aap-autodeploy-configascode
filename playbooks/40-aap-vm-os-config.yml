@@ -1,0 +1,106 @@
+---
+# Prepare the operating system of the VM of a deployment version for the AAP
+# installer.
+#
+# Order: register the VM with Red Hat; update it with the RHEL update stage
+# (14-rhel-update.yml, reboot if anything changed); cold snapshot before the
+# install; trust the shared AutoDeploy CA, grow the root partition and XFS,
+# resolve the VM's name locally, install the packages the installer needs.
+#
+# The VM's plays target its AAP inventory host, which the VM create stage
+# recorded as aap<AAP version>-<deployment version> (a play's hosts cannot
+# read inventory variables, so the pattern stays here); the snapshot runs on
+# the hypervisor in autodeploy_target.
+#
+# Rerunnable: an existing snapshot is kept and the VM is not shut down for it
+# again; the other steps converge.
+#
+# Credentials: the hypervisor's machine credential (both SSH hops) and Red Hat
+# Subscription-NGNG (rhsm_org_id, rhsm_activation_key).
+#
+# Required variables, from the workflow or the CaC inventory:
+#   autodeploy_deployment_version   deployment version, for example v29
+#   vm_name, vm_fqdn                VM / inventory host name and its DNS name
+#   vm_connection                   VM host variables; ansible_host is its address
+#   vm_snapshot_names               dict: before_install, after_install
+#   vm_shutdown_timeout             seconds the guest may take to power off
+#   vm_root_disk, vm_root_partition root disk and partition number
+#   vm_packages                     packages the installer needs
+#   autodeploy_ca_cert              shared AutoDeploy CA certificate
+
+- name: Register the VM with Red Hat
+  hosts: "aap*-{{ autodeploy_deployment_version }}"
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Register with the activation key
+      ansible.builtin.include_role:
+        name: redhat.rhel_system_roles.rhc
+      vars:
+        rhc_auth:
+          activation_keys:
+            keys:
+              - "{{ rhsm_activation_key }}"
+        rhc_organization: "{{ rhsm_org_id }}"
+
+- name: Update the VM to the latest packages
+  ansible.builtin.import_playbook: 14-rhel-update.yml
+  vars:
+    rhel_update_hosts: "aap*-{{ autodeploy_deployment_version }}"
+
+- name: Take the cold snapshot before the install
+  hosts: autodeploy_target
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Snapshot the VM
+      ansible.builtin.import_tasks: tasks/vm-cold-snapshot.yml
+      vars:
+        vm_snapshot: "{{ vm_snapshot_names.before_install }}"
+
+- name: Prepare the VM for the installer
+  hosts: "aap*-{{ autodeploy_deployment_version }}"
+  become: true
+  gather_facts: false
+  handlers:
+    # No module rebuilds the RHEL trust store.
+    - name: Rebuild the trust store
+      ansible.builtin.command:
+        argv: [update-ca-trust]
+      changed_when: true
+  tasks:
+    - name: Trust the shared AutoDeploy CA
+      ansible.builtin.copy:
+        content: "{{ autodeploy_ca_cert }}"
+        dest: /etc/pki/ca-trust/source/anchors/autodeploy-ca.crt
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Rebuild the trust store
+
+    # No module grows a partition. growpart answers NOCHANGE with rc 1 when
+    # the partition already fills the disk.
+    - name: Grow the root partition to the end of the disk
+      ansible.builtin.command:
+        argv: [growpart, "{{ vm_root_disk }}", "{{ vm_root_partition }}"]
+      register: vm_os_config_growpart
+      changed_when: vm_os_config_growpart.rc == 0
+      failed_when: vm_os_config_growpart.rc != 0 and 'NOCHANGE' not in vm_os_config_growpart.stdout
+
+    - name: Grow the root XFS filesystem to the partition
+      community.general.filesystem:
+        dev: "{{ vm_root_disk }}{{ vm_root_partition }}"
+        fstype: xfs
+        resizefs: true
+
+    # Public DNS points the VM's name at the hypervisor; on the VM it must
+    # resolve to the VM itself.
+    - name: Resolve the VM's name to the VM
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        line: "{{ vm_connection.ansible_host }} {{ vm_fqdn }} {{ vm_name }}"
+
+    - name: Install the installer's packages
+      ansible.builtin.dnf:
+        name: "{{ vm_packages }}"
+        state: present
