@@ -10,8 +10,9 @@
 # infra_playbook (path from that repository's root). Without infra_playbook
 # this node does nothing. The playbook runs in this job's execution
 # environment, from the public checkout, with the use case vault (vault ID
-# cac, the private vault's password) and usecase_secrets_dir, the -secrets
-# checkout with its configuration.
+# cac, the private vault's password, from a 0600 file in the scratch
+# directory) and usecase_secrets_dir, the -secrets checkout with its
+# configuration.
 #
 # Collections: the nested run sees the collections this job sees (the
 # deployer project's, through the inherited ANSIBLE_COLLECTIONS_PATH). If the
@@ -82,18 +83,32 @@
           register: usecase_public_galaxy
           when: (usecase_public_dir ~ '/collections/requirements.yml') is file
 
+        # The vault password goes through a file in the scratch directory,
+        # so the nested run itself needs no no_log and its output (and its
+        # errors) stays visible. The use case playbook protects its own
+        # secret-bearing tasks.
+        - name: Write the vault password file
+          ansible.builtin.copy:
+            content: "{{ vaulted_cac_vault_password }}"
+            dest: "{{ usecase_public_scratch.path }}/vault-password"
+            mode: "0600"
+          no_log: true
+
         - name: Run the use case's infra playbook
           ansible.builtin.command:
             argv:
               - ansible-playbook
               - --vault-id
-              - cac@/dev/stdin
+              - "cac@{{ usecase_public_scratch.path }}/vault-password"
               - --extra-vars
               - "usecase_target_aap={{ usecase_target_aap }}"
               - --extra-vars
               - "usecase_secrets_dir={{ usecase_scratch.path }}"
               - "{{ usecase.infra_playbook }}"
             chdir: "{{ usecase_public_dir }}"
-            stdin: "{{ vaulted_cac_vault_password }}"
-          no_log: true  # the vault password is the task's input
           changed_when: true
+      always:
+        - name: Remove the vault password file
+          ansible.builtin.file:
+            path: "{{ usecase_public_scratch.path }}/vault-password"
+            state: absent
