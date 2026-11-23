@@ -1,5 +1,24 @@
 # Design decisions history
 
+## Base trees on the section rule; v31 retired, v32 deployed — 2026-11-23
+
+User decision (23 November 2026, CET; bead bead-wd-0gnz.39): the section
+rule applies to the base trees too (hub tokens and sync sources in config,
+credentials the jobs use in content).
+
+Agent choices: the trees moved in the private repository (`06fc466`); the
+playbook code stays, 60 now applies organization Default with its Galaxy
+credentials, the hub remotes and the EE registry, 70 the repositories,
+default EE and the deployer's credentials. Comments and README only,
+`aca94b1` (v0.2.1, 07:40 CET). Checks: ansible-lint production strict 0/0 on
+60 and 70.
+
+Proof: Job 5418 — JT 205 AutoDeploy-NGNG Instance retire (v31) successful;
+Workflow Job 5420 — WFJT 211 AutoDeploy-NGNG AAP deploy drew v32 and
+succeeded on the first run (Jobs 5428 and 5429 applied the moved trees). On
+v32, JT 11 Deploy UseCases to AAP deployed AIOps self-healing with Job 8 after
+three deployer project updates failed on a hub artifact hash mismatch.
+
 ## Use case deployer on the section rule: infra, config, content — 2026-11-23
 
 User decisions (23 November 2026, CET; bead bead-wd-0gnz.39): `aap-infra/` =
