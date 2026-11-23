@@ -1,5 +1,40 @@
 # Design decisions history
 
+## Job container network set at AAP install time — 2026-11-23
+
+User decision (23 November 2026, CET; bead bead-wd-0gnz.46): set the job
+container network permanently at AAP install time in the base, test on v32.
+
+Evidence: slirp4netns (AAP's default `DEFAULT_CONTAINER_RUN_OPTIONS`) stalls
+large downloads in job containers, so ansible-galaxy gets an early EOF and
+reports "Mismatch artifact hash" (v32 deployer project updates 3, 5, 6). Repro
+on v32 (ad hoc 5442-5445 from the production AAP): slirp4netns stalled 5/20
+and hung other runs, pasta with its own container address 80/80 clean. The
+installer's `settings.py.j2` (bundle 2.7-8, read with ad hoc 5448/5449) sets
+the slirp4netns default on line 20 and renders `controller_extra_settings`
+after it (line 81), so the extra setting wins.
+
+Agent choices: `aap-installer-inventory.j2` renders
+`controller_extra_settings` with `DEFAULT_CONTAINER_RUN_OPTIONS` from
+`aap_installer_container_run_options` (private CaC, Inventory 10 variables),
+JSON so the installer's INI parser reads a list. `e9aad1e` (v0.2.2), private
+`07de8d3` (v0.2.1).
+
+Rejected: the controller API / CoP `controller_settings` (the installer's
+settings file wins, `defined_in_file`; Job 5446 changed nothing, reverted in
+private `18c258e`); plain `--network pasta` (the container gets the VM's
+address and the AAP FQDN resolves to itself: connection refused);
+slirp4netns with retries (hides the stall, every large download stays slow
+or fails).
+
+Proof: Job 5451 — JT 209 AutoDeploy-NGNG 52 AAP install (v32) successful
+10:48-10:59 CET (snapshot after the install kept, skipped). v32 settings:
+`['--network', 'pasta:-a,10.0.2.100,-n,24,-g,10.0.2.2', '--security-opt',
+'label=level:s0:c100,c200']`. On v32: Project 7 AAP AutoDeploy-NGNG updates
+16-21 6/6 successful with the collection fetch (job_args show the pasta
+option), Job 22 Demo Job Template successful, ad hoc 25 from a job container
+(address 10.0.2.100): AAP Gateway ping, hub API and GitHub all 200.
+
 ## Base trees on the section rule; v31 retired, v32 deployed — 2026-11-23
 
 User decision (23 November 2026, CET; bead bead-wd-0gnz.39): the section

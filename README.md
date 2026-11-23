@@ -255,7 +255,13 @@ credential, renders the installer inventory (growth topology, bundle install,
 MCP server, `ca_tls_cert`/`ca_tls_key` from the shared CA, no hub seeding)
 into the bundle directory and runs the containerized installer as
 `aap_install_user`. A Gateway ping on the VM against the shared CA proves the
-install. The cold snapshot after the install follows, then the hypervisor gets the AAP
+install. Job container networking: the installer writes
+`DEFAULT_CONTAINER_RUN_OPTIONS` into the controller's settings file (the API
+cannot change it), so the inventory sets it through
+`controller_extra_settings` from `aap_installer_container_run_options`:
+pasta with its own container address instead of AAP's default slirp4netns,
+which stalls large downloads in job containers (hub artifact hash
+mismatches); plain pasta would give the container the VM's address. The cold snapshot after the install follows, then the hypervisor gets the AAP
 vhost (Let's Encrypt certificate, upstream verified with the shared CA, login
 rate limit; `nginx -t` before the reload), and a ping of the public URL proves
 the path end to end.
