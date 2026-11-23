@@ -272,16 +272,18 @@ attaches the subscription with the CoP role `controller_license` (Red Hat
 service account, filter from the CaC), then reads the private repository's
 AAP config tree (`aap_config_cac_dir`, `aap-config/`, outside `usecases/` so the CaC apply
 job never applies it to the deploying AAP) with `filetree_read` and applies it
-with `dispatch`: the Git write credential type, the vault and Git write
-credentials and the AAP's own API credential with its MCP token.
+with `dispatch`: what changes AAP itself, namely organization Default with
+three Galaxy credentials on the AAP's own hub (hub token), the collection
+remotes rh-certified, validated and community (requirements files next to
+them) and the deploying AAP's hub as an anonymous container registry.
 
 The base content stage (`70-aap-base-content-config.yml`) logs in the same
 way, takes the AAP's tokens from the vault and applies the base content tree
-(`aap_content_cac_dir`, `aap-content/base/`): collection remotes rh-certified, validated and community with
-their repositories and distributions (no sync), the deploying AAP's hub as an
-anonymous container registry and the repository of the default EE, three
-Galaxy and one registry credential on the AAP's own hub, the default EE pinned
-by digest, and the Galaxy credentials of organization Default. Then it syncs the EE repository itself (the CoP sync role
+(`aap_content_cac_dir`, `aap-content/base/`): the collection repositories
+and distributions (no sync), the repository of the default EE, the registry
+credential on the AAP's own hub, the default EE pinned by digest, the Git
+write credential type and the vault, Git write and own-AAP (MCP token)
+credentials the deployer uses. Then it syncs the EE repository itself (the CoP sync role
 stops waiting after about 50 s), sets `DEFAULT_EXECUTION_ENVIRONMENT` and
 syncs the three collection repositories, whose remotes carry requirements
 files with exactly the collections the deployer project needs

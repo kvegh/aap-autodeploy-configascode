@@ -3,19 +3,19 @@
 # logged in as the installer's admin, and install the use case deployer last.
 #
 # Order: apply the base content CaC tree of the private repository with the
-# Community of Practice (CoP) collections: hub collection remotes,
-# repositories and distributions (no sync), the deploying AAP's hub registry
-# and the default EE repository, the Galaxy and registry credentials on this
-# AAP's own hub (with its hub token), the default EE and the Galaxy
-# credentials of organization Default; sync the default EE from the deploying
-# AAP's hub and make it the global default; sync the collections the use case
-# deployer's project needs into this AAP's hub. Last, read the use case
-# deployer tree and apply its inventory, project, job templates and
-# workflows.
+# Community of Practice (CoP) collections: hub collection repositories and
+# distributions (no sync), the default EE repository, the registry credential
+# on this AAP's own hub, the default EE, the Git write credential type and
+# the vault, Git write and own-AAP (MCP token) credentials the deployer uses;
+# sync the default EE from the deploying AAP's hub and make it the global
+# default; sync the collections the use case deployer's project needs into
+# this AAP's hub. Last, read the use case deployer tree and apply its
+# inventory, project, job templates and workflows.
 #
 # The platform configuration (60-aap-platform-config.yml) ran before: it
-# stored this AAP's tokens in the vault and created the credentials the
-# deployer uses. Neither tree may live under usecases/: the CaC apply job
+# stored this AAP's tokens in the vault and created the hub remotes and the
+# registry these repositories sync from. Neither tree may live under
+# usecases/: the CaC apply job
 # would apply it to the deploying AAP. The deployer tree is a sibling of the
 # content tree, not inside it: filetree_read searches recursively and would
 # apply the deployer project before its collections are synced. The second
@@ -44,7 +44,7 @@
 # From the vault (env_variables.yml): vaulted_aap_installer
 # (gateway_admin_password), vaulted_aap_instance_tokens (this AAP's tokens,
 # written by the platform configuration) and the secrets the trees refer to.
-# Given to the trees: aap_base_tokens (hub, mcp), cac_scratch (the download).
+# Given to the trees: aap_base_tokens (mcp).
 
 - name: Configure the base content of the new AAP
   hosts: localhost

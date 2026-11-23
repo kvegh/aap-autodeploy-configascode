@@ -7,10 +7,11 @@
 # store them in the private repository's vault, both only when the vault has
 # none for this AAP yet; attach the subscription with a Red Hat service
 # account; apply the platform CaC tree of the private repository with the
-# Community of Practice (CoP) collections: the Git write credential type, the
-# vault and Git write credentials and this AAP's own AAP credential (with its
-# MCP token). The base content (70-aap-base-content-config.yml) follows and
-# reads the tokens from the vault.
+# Community of Practice (CoP) collections: what changes AAP itself, namely
+# organization Default with the Galaxy credentials of this AAP's own hub (with
+# its hub token), the hub collection remotes and the deploying AAP's EE
+# registry. The base content (70-aap-base-content-config.yml) follows, reads
+# the tokens from the vault and syncs from these sources.
 #
 # The tree may not live under usecases/: the CaC apply job would apply it to
 # the deploying AAP. The download stays in the execution environment's
@@ -38,7 +39,7 @@
 # _secret, vaulted_cac_vault_password (to write the vault), the secrets the
 # tree refers to, and vaulted_aap_instance_tokens (written here: per AAP VM
 # name, hub and mcp).
-# Given to the tree: aap_base_tokens (hub, mcp).
+# Given to the tree: aap_base_tokens (hub), cac_scratch (the download).
 
 - name: Configure the platform of the new AAP
   hosts: localhost
