@@ -21,7 +21,6 @@
 # Required variables, from the workflow or the CaC inventory:
 #   autodeploy_deployment_version   deployment version, for example v29
 #   vm_name, vm_fqdn                VM / inventory host name and its DNS name
-#   vm_connection                   VM host variables; ansible_host is its address
 #   vm_snapshot_names               dict: before_install, after_install
 #   vm_shutdown_timeout             seconds the guest may take to power off
 #   vm_root_disk, vm_root_partition root disk and partition number
@@ -99,7 +98,7 @@
     - name: Resolve the VM's name to the VM
       ansible.builtin.lineinfile:
         path: /etc/hosts
-        line: "{{ vm_connection.ansible_host }} {{ vm_fqdn }} {{ vm_name }}"
+        line: "{{ ansible_host }} {{ vm_fqdn }} {{ vm_name }}"
 
     - name: Install the installer's packages
       ansible.builtin.dnf:

@@ -28,7 +28,6 @@
 #                                   private repository, ref and use case whose
 #                                   env_variables.yml holds the vault values
 #   vm_name, vm_fqdn                VM / inventory host name and AAP name
-#   vm_connection                   VM host variables; ansible_host is its address
 #   vm_snapshot_names               dict: before_install, after_install
 #   vm_shutdown_timeout             seconds the guest may take to power off
 #   aap_install_user                owner of the setup bundle, runs the installer

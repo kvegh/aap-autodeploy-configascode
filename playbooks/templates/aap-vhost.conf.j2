@@ -1,7 +1,8 @@
 # Managed by aap-autodeploy-configascode
 #
 # Public entry of the AAP {{ vm_fqdn }}: TLS with its Let's Encrypt
-# certificate, proxied to the AAP VM, whose certificate must be signed by the
+# certificate, proxied to the AAP VM at the DHCP address its AAP inventory
+# host records (AAP VM stage), whose certificate must be signed by the
 # shared AutoDeploy CA. Logins are rate limited per client address.
 server {
     listen {{ host_web_edge_https_port }} ssl;
@@ -26,10 +27,10 @@ server {
 
     location = /api/gateway/v1/login/ {
         limit_req zone={{ aap_nginx_login_zone }} burst={{ aap_nginx_login_burst }} nodelay;
-        proxy_pass https://{{ vm_connection.ansible_host }};
+        proxy_pass https://{{ hostvars[vm_name].ansible_host }};
     }
 
     location / {
-        proxy_pass https://{{ vm_connection.ansible_host }};
+        proxy_pass https://{{ hostvars[vm_name].ansible_host }};
     }
 }
