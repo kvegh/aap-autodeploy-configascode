@@ -1,5 +1,15 @@
 # Design decisions history
 
+## Nested infra run: explicit localhost inventory — 2026-11-23
+
+Found in Job 35 — Deploy UseCase AAP infra on v32: the nested
+`ansible-playbook` stopped with "No inventory was parsed"; the job
+environment treats an empty inventory as an error. Agent choice (routine
+fix): the nested run gets `--inventory localhost,`; the use case playbook
+adds its other hosts itself.
+
+Implementation commit: `69f2cbf` (v0.3.3).
+
 ## Nested infra run: vault password from a file, output visible — 2026-11-23
 
 Found in the first v32 run of the Disconnected Windows deployer (Job 30 —
