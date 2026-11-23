@@ -322,9 +322,10 @@ root). The sections follow the user's rule of 23 November 2026:
   that this job does not already have (if the file exists; from
   ansible-galaxy's default server, as a job gets no galaxy server
   configuration from AAP), then runs `infra_playbook` (path from the
-  repository root) from that checkout with the use case vault and the extra
-  variables `usecase_target_aap` and `usecase_secrets_dir` (the -secrets
-  checkout). Declared by: Disconnected Windows.
+  repository root) from that checkout with the use case vault (password from
+  a 0600 file in the scratch directory, so the nested output stays visible)
+  and the extra variables `usecase_target_aap` and `usecase_secrets_dir`
+  (the -secrets checkout). Declared by: Disconnected Windows.
 - config = AAP itself, from `aap-config/`: settings, organizations, teams,
   local users, authenticators and maps, OAuth applications, hub collection
   remotes and EE registries (sync sources and tokens), credential types that

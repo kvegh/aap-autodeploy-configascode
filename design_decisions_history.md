@@ -1,5 +1,19 @@
 # Design decisions history
 
+## Nested infra run: vault password from a file, output visible — 2026-11-23
+
+Found in the first v32 run of the Disconnected Windows deployer (Job 30 —
+Deploy UseCase AAP infra): the nested `ansible-playbook` failed and the job
+showed only the no_log censor, because the vault password was the task's
+stdin. Agent choice (routine fix, within the task-level no_log rule): the
+password is written to a 0600 file in the job's scratch directory by a
+protected task, passed with `--vault-id cac@<file>` and removed in an
+`always` block; the nested run no longer needs `no_log` and its output,
+including errors, is visible. The use case playbook protects its own
+secret-bearing tasks.
+
+Implementation commit: `19e20d8` (v0.3.2).
+
 ## Task-level no_log on every secret-bearing task — 2026-11-23
 
 User decision (23 November 2026, CET; shared AGENTS.md rule): Ansible content
