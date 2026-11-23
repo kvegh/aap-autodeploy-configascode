@@ -314,8 +314,17 @@ root). The sections follow the user's rule of 23 November 2026:
 
 - infra = outside AAP (hosts, VMs, hypervisor, RHEL under AAP, client
   machines): the node runs the use case's own playbook if its catalog entry
-  declares `infra_playbook` (a path in its -secrets repository, run with the
-  use case vault), otherwise it does nothing. None declares one yet.
+  declares `infra_playbook`, otherwise it does nothing. Playbooks are code
+  and live in the use case's public repository; the -secrets repository
+  holds only secrets and configuration (user decision 2026-11-23). The node
+  clones the public repository (`infra_repository` at `infra_ref`, no
+  token), installs the collections of its `collections/requirements.yml`
+  that this job does not already have (if the file exists; from
+  ansible-galaxy's default server, as a job gets no galaxy server
+  configuration from AAP), then runs `infra_playbook` (path from the
+  repository root) from that checkout with the use case vault and the extra
+  variables `usecase_target_aap` and `usecase_secrets_dir` (the -secrets
+  checkout). Declared by: Disconnected Windows.
 - config = AAP itself, from `aap-config/`: settings, organizations, teams,
   local users, authenticators and maps, OAuth applications, hub collection
   remotes and EE registries (sync sources and tokens), credential types that

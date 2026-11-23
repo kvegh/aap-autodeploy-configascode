@@ -3,13 +3,25 @@
 # hypervisor, RHEL under AAP, client machines). First node of the use case's
 # workflow (infra, config, content); the same playbook serves every use case.
 #
-# A use case declares its infra playbook with the catalog key infra_playbook,
-# a playbook path in its -secrets repository. Without it this node does
-# nothing. The playbook runs in this job's execution environment with the
-# use case vault (vault ID cac, the private vault's password).
+# A use case's -secrets repository holds only secrets and configuration; its
+# playbooks are code and live in its public repository (user decision
+# 2026-11-23). A use case declares its infra playbook with the catalog keys
+# infra_repository (public repository, owner/name), infra_ref and
+# infra_playbook (path from that repository's root). Without infra_playbook
+# this node does nothing. The playbook runs in this job's execution
+# environment, from the public checkout, with the use case vault (vault ID
+# cac, the private vault's password) and usecase_secrets_dir, the -secrets
+# checkout with its configuration.
+#
+# Collections: the nested run sees the collections this job sees (the
+# deployer project's, through the inherited ANSIBLE_COLLECTIONS_PATH). If the
+# public repository has collections/requirements.yml, what is still missing
+# is installed into a scratch directory first; a job gets no galaxy server
+# configuration from AAP, so that is ansible-galaxy's default server.
 #
 # Credentials: the GitHub read credential of the private repository and its
-# vault credential (it also decrypts the use case vaults).
+# vault credential (it also decrypts the use case vaults). The public
+# repository needs none.
 #
 # Required variables, from the job template, the workflow and the deployer:
 #   cac_repository, cac_repository_ref, cac_usecase, usecase_catalog_file
@@ -30,17 +42,58 @@
     - name: Download the use case repository
       ansible.builtin.import_tasks: tasks/usecase-repository-download.yml
 
-    - name: Run the use case's infra playbook
-      ansible.builtin.command:
-        argv:
-          - ansible-playbook
-          - --vault-id
-          - cac@/dev/stdin
-          - --extra-vars
-          - "usecase_target_aap={{ usecase_target_aap }}"
-          - "{{ usecase.infra_playbook }}"
-        chdir: "{{ usecase_scratch.path }}"
-        stdin: "{{ vaulted_cac_vault_password }}"
-      no_log: true  # the vault password is the task's input
-      changed_when: true
+    - name: Create a scratch directory for the public repository
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .usecase-public
+      register: usecase_public_scratch
       when: usecase.infra_playbook is defined
+
+    - name: Run the use case's infra playbook from its public repository
+      when: usecase.infra_playbook is defined
+      vars:
+        usecase_public_dir: "{{ usecase_public_scratch.path }}/repository"
+        usecase_public_collections: "{{ usecase_public_scratch.path }}/collections"
+      # Scratch collections first, then what this job already has.
+      environment:
+        ANSIBLE_COLLECTIONS_PATH: >-
+          {{ [usecase_public_collections, lookup('ansible.builtin.env', 'ANSIBLE_COLLECTIONS_PATH')]
+             | select | join(':') }}
+      block:
+        - name: Clone the public repository at its ref
+          ansible.builtin.git:
+            repo: "https://github.com/{{ usecase.infra_repository }}.git"
+            dest: "{{ usecase_public_dir }}"
+            version: "{{ usecase.infra_ref }}"
+
+        # Collections already on the path are skipped, the rest come from
+        # the default galaxy server.
+        - name: Install the public repository's missing collections
+          ansible.builtin.command:
+            argv:
+              - ansible-galaxy
+              - collection
+              - install
+              - -r
+              - "{{ usecase_public_dir }}/collections/requirements.yml"
+              - -p
+              - "{{ usecase_public_collections }}"
+          changed_when: "'Nothing to do' not in usecase_public_galaxy.stdout"
+          register: usecase_public_galaxy
+          when: (usecase_public_dir ~ '/collections/requirements.yml') is file
+
+        - name: Run the use case's infra playbook
+          ansible.builtin.command:
+            argv:
+              - ansible-playbook
+              - --vault-id
+              - cac@/dev/stdin
+              - --extra-vars
+              - "usecase_target_aap={{ usecase_target_aap }}"
+              - --extra-vars
+              - "usecase_secrets_dir={{ usecase_scratch.path }}"
+              - "{{ usecase.infra_playbook }}"
+            chdir: "{{ usecase_public_dir }}"
+            stdin: "{{ vaulted_cac_vault_password }}"
+          no_log: true  # the vault password is the task's input
+          changed_when: true
