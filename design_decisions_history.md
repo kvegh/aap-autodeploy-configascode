@@ -1,5 +1,46 @@
 # Design decisions history
 
+## Use case infra playbooks live in the public repository — 2026-11-23
+
+User decision (23 November 2026, CET): a use case's -secrets repository holds
+only secrets and configuration; playbooks (code) live in the use case's
+public repository. This supersedes the agent choice of the section rule
+entry below (the infra node ran `infra_playbook`, a path inside the -secrets
+repository).
+
+Change: `usecase-aap-infra.yml` still downloads the -secrets repository
+(configuration and vault). When the catalog entry declares `infra_playbook`,
+it clones `https://github.com/<infra_repository>.git` at `infra_ref` (public,
+no token) into a scratch directory and runs `ansible-playbook --vault-id
+cac@/dev/stdin -e usecase_target_aap=… -e usecase_secrets_dir=<-secrets
+checkout> <infra_playbook>` from that checkout. Catalog keys
+`infra_repository`, `infra_ref`, `infra_playbook` (path from the public
+repository root), agreed with the Windows use case; Disconnected Windows
+declares `playbooks/aap-infra.yml`.
+
+Agent choices: collections — the deployer EE (`ee-proj-aap-cac`,
+ansible-core 2.20.10) contains none, and AAP gives a job no galaxy server
+configuration (organization galaxy credentials reach project updates only;
+the EE has no ansible.cfg, so ansible-galaxy uses galaxy.ansible.com). If the
+public repository has `collections/requirements.yml`, the node runs
+`ansible-galaxy collection install -r … -p <scratch>/collections` with
+`ANSIBLE_COLLECTIONS_PATH` = scratch + the job's inherited value; collections
+already on that path (the deployer project's, e.g. the certified
+`ansible.controller`, `ansible.platform`, `redhat.rhel_system_roles`) are
+skipped (checked locally in the EE: "Nothing to do"), the rest come from
+galaxy.ansible.com. The nested run gets the same path. `ansible.builtin.git`
+for the clone (git 2.52.0 is in the EE). Rejected: pointing ansible-galaxy at
+the target AAP's hub (the use case's collections are synced only by the
+content node, which runs after infra).
+
+Unverified until the first live run: that AAP sets `ANSIBLE_COLLECTIONS_PATH`
+in the job environment (otherwise certified collections are looked up on
+galaxy.ansible.com and fail); that job containers reach github.com and
+galaxy.ansible.com; that the nested playbook finds everything it needs.
+
+Implementation `146c2e3` (v0.3.0), private `2d918b6` (v0.2.0). Validated
+with `ansible-playbook --syntax-check`; not run on AAP.
+
 ## Job container network set at AAP install time — 2026-11-23
 
 User decision (23 November 2026, CET; bead bead-wd-0gnz.46): set the job
