@@ -1,5 +1,55 @@
 # Design decisions history
 
+## Several AAPs on one hypervisor: AAP VMs get DHCP addresses — 2026-11-23
+
+User decisions (19 November 2026, CET; bead bead-wd-0gnz.42): the hypervisor
+may host two AAPs at once, each with its own deployment version; additional
+AAP VMs get counter-incremented names and DHCP-assigned MAC and address. User
+approval to implement: 23 November 2026, CET.
+
+Change: the AAP VM stage creates the VM without a MAC (libvirt generates
+one), waits for its DHCP lease with `community.libvirt.virt`
+(`get_ifaddresses`, source `lease`; `vm_address_retries` times 10 s, CaC) and
+records the IPv4 address as `ansible_host` on the VM's AAP inventory host,
+which already existed. That host is the one place later stages read the
+address from: the VM plays connect through it, the VM OS configuration writes
+`ansible_host` into `/etc/hosts`, the vhost proxies to
+`hostvars[vm_name].ansible_host`. `vm_connection` keeps only `ansible_fqdn` and
+the jump host; `vm_mac` is gone.
+
+Checked, unchanged: names already carry the deployment version (VM, disk,
+inventory host, AAP name and DNS record, certificate, vhost file; snapshots
+are per VM; vault tokens per VM name), so the counter-incremented name is the
+existing vXY name; the retire job finds everything by version and needs no
+address; the version handover (set_stats of the version stage) is untouched;
+the login rate limit zone is shared by all vhosts on purpose.
+
+v32: its VM keeps the fixed MAC of the reservation `aap` and its inventory
+host already records that address, so nothing changes live. The reservation
+stays in the private CaC until v32 is retired, also so that no DHCP VM gets
+its address meanwhile.
+
+Agent choices: the native `community.libvirt.virt` command instead of
+`virsh domifaddr`; the lease source (no guest agent in the image); no sticky
+DHCP host entry for new VMs (a renewed lease keeps the address; see open
+point). The Disconnected Windows infra playbook, which had the reserved
+address as configuration, now reads the AAP VM's address the same way by its
+name `usecase_target_aap`.
+
+Open point: dnsmasq leases expire (libvirt default one hour); a VM that is off
+longer while another VM takes its address would come back with a new address
+and a stale inventory host and vhost. Rerunning the AAP VM stage records the
+new address; a permanent fix (infinite lease time in the network, or a DHCP
+host entry per VM) needs a decision.
+
+Not run on AAP or the hypervisor. Syntax check (ansible-core 2.16.19) passes
+for the VM OS configuration and installation stages; the AAP VM stage needs
+ansible.controller, not installed locally, and passes with that module
+stubbed. The address expression was tested locally against a sample
+`get_ifaddresses` result.
+
+Implementation commit: `ab36391` (v0.4.0).
+
 ## Nested infra run: explicit localhost inventory — 2026-11-23
 
 Found in Job 35 — Deploy UseCase AAP infra on v32: the nested
