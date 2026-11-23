@@ -98,6 +98,10 @@
           ansible.builtin.command:
             argv:
               - ansible-playbook
+              # The job environment fails on an empty inventory; localhost
+              # is the nested run's only start host.
+              - --inventory
+              - localhost,
               - --vault-id
               - "cac@{{ usecase_public_scratch.path }}/vault-password"
               - --extra-vars
