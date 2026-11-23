@@ -1,16 +1,25 @@
 ---
-# Apply the AAP content of one use case to the target AAP: hub collection
-# remotes and repositories, EE registries and repositories, and EEs from the
-# use case's aap-content/ tree; then sync the collection and EE repositories. Second
-# node of the use case's workflow (infra, content, config); the same
-# playbook serves every use case.
+# Apply what one use case's AAP uses to work with external systems, from its
+# aap-content/ tree: hub collection remotes (requirements), collection and EE
+# repositories (synced), credential types of this use case only,
+# credentials, EEs, labels, inventories, hosts, groups, projects, job
+# templates (with surveys), workflows, schedules and the EDA objects
+# (credentials, projects, event streams, decision environments, rulebook
+# activations, created enabled). Third node of the use case's workflow
+# (infra, config, content); the same playbook serves every use case. No job
+# template or workflow is launched.
 #
-# The syncs run here and not in the CoP sync roles, which stop waiting after
-# about 50 s; the job template's timeout bounds them. A sync adds content and
-# removes none. Use case EEs come from the deploying AAP's hub through the
-# base's container registry, as the default EE does.
+# Three steps, so that each finds what it needs: the hub content first and
+# its syncs (the projects' first syncs install those collections); then the
+# objects up to the projects; then the projects the job templates use are
+# updated (a tree may create them with wait: false) and the job templates,
+# workflows, schedules and EDA objects follow. The syncs run here and not in
+# the CoP sync roles, which stop waiting after about 50 s; the job template's
+# timeout bounds them. A sync adds content and removes none. Use case EEs
+# come from the deploying AAP's hub through the base's container registry,
+# as the default EE does.
 #
-# Login, credentials and required variables: as usecase-aap-infra.yml.
+# Login, credentials and required variables: as usecase-aap-config.yml.
 
 - name: Apply the AAP content of one use case
   hosts: localhost
@@ -28,24 +37,34 @@
     aap_validate_certs: true
     aap_configuration_secure_logging: true
     aap_configuration_async_dir: /tmp/.ansible_async  # empty default broke async_status ("could not find job") on ansible-core 2.20
-    aap_configuration_dispatcher_roles:
-      - {role: hub_collection_remote, var: hub_collection_remotes, tags: collection_remotes}
-      - {role: hub_collection_repository, var: hub_collection_repositories, tags: collection_repositories}
-      - {role: hub_ee_registry, var: hub_ee_registries, tags: ee_registries}
-      - {role: hub_ee_repository, var: hub_ee_repositories, tags: ee_repositories}
-      - {role: controller_execution_environments, var: controller_execution_environments, tags: execution_environments}
+    # A project sync that installs collections takes minutes; the CoP wait
+    # (50 polls) at 30 s per poll covers 1500 s.
+    controller_configuration_projects_async_delay: 30
   module_defaults:
+    group/ansible.controller.controller:
+      aap_hostname: "{{ aap_hostname }}"
+      aap_token: "{{ aap_token }}"
+      aap_validate_certs: "{{ aap_validate_certs }}"
     group/ansible.hub.hub:
       aap_hostname: "{{ aap_hostname }}"
       aap_token: "{{ aap_token }}"
       validate_certs: "{{ aap_validate_certs }}"
   tasks:
-    - name: Read the use case tree
-      ansible.builtin.import_tasks: tasks/usecase-tree-read.yml
+    - name: Download the use case repository
+      ansible.builtin.import_tasks: tasks/usecase-repository-download.yml
 
-    - name: Apply the use case's AAP content
+    - name: Read the use case's content tree
+      ansible.builtin.include_role:
+        name: infra.aap_configuration_extended.filetree_read
+
+    - name: Apply the use case's hub content
       ansible.builtin.include_role:
         name: infra.aap_configuration.dispatch
+      vars:
+        aap_configuration_dispatcher_roles:
+          - {role: hub_collection_remote, var: hub_collection_remotes, tags: collection_remotes}
+          - {role: hub_collection_repository, var: hub_collection_repositories, tags: collection_repositories}
+          - {role: hub_ee_repository, var: hub_ee_repositories, tags: ee_repositories}
 
     - name: Sync the use case's collection repositories from their remotes
       ansible.hub.collection_repository_sync:
@@ -64,3 +83,37 @@
       loop: "{{ hub_ee_repositories | default([]) | selectattr('registry', 'defined') }}"
       loop_control:
         label: "{{ item.name }}"
+
+    - name: Apply the use case's objects up to the projects
+      ansible.builtin.include_role:
+        name: infra.aap_configuration.dispatch
+      vars:
+        aap_configuration_dispatcher_roles:
+          - {role: controller_credential_types, var: controller_credential_types, tags: credential_types}
+          - {role: controller_credentials, var: controller_credentials, tags: credentials}
+          - {role: controller_execution_environments, var: controller_execution_environments, tags: execution_environments}
+          - {role: controller_labels, var: controller_labels, tags: labels}
+          - {role: controller_inventories, var: controller_inventories, tags: inventories}
+          - {role: controller_hosts, var: controller_hosts, tags: hosts}
+          - {role: controller_host_groups, var: controller_groups, tags: groups}
+          - {role: controller_projects, var: controller_projects, tags: projects}
+
+    - name: Update the projects the use case's job templates use
+      ansible.controller.project_update:
+        name: "{{ item }}"
+        wait: true
+      loop: "{{ controller_templates | default([]) | map(attribute='project') | unique }}"
+
+    - name: Apply the use case's job templates, workflows, schedules and EDA objects
+      ansible.builtin.include_role:
+        name: infra.aap_configuration.dispatch
+      vars:
+        aap_configuration_dispatcher_roles:
+          - {role: controller_job_templates, var: controller_templates, tags: job_templates}
+          - {role: controller_workflow_job_templates, var: controller_workflows, tags: workflow_job_templates}
+          - {role: controller_schedules, var: controller_schedules, tags: schedules}
+          - {role: eda_credentials, var: eda_credentials, tags: eda_credentials}
+          - {role: eda_projects, var: eda_projects, tags: eda_projects}
+          - {role: eda_event_streams, var: eda_event_streams, tags: eda_event_streams}
+          - {role: eda_decision_environments, var: eda_decision_environments, tags: eda_decision_environments}
+          - {role: eda_rulebook_activations, var: eda_rulebook_activations, tags: eda_rulebook_activations}

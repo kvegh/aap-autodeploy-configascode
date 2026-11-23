@@ -3,7 +3,7 @@
 # that runs the play (the execution environment); registers cac_scratch.
 # Shared by aap-cac-apply.yml, 52-aap-install.yml, 60-aap-platform-config.yml,
 # 70-aap-base-content-config.yml, instance-retire.yml and
-# tasks/usecase-tree-read.yml.
+# tasks/usecase-repository-download.yml.
 #
 # Required variables:
 #   cac_repository         private repository as owner/name

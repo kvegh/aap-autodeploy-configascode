@@ -1,6 +1,6 @@
 ---
 # Deploy the chosen use cases to the chosen AAP: run each chosen use case's
-# workflow (infra, content, config) on this AAP, one after the other, each
+# workflow (infra, config, content) on this AAP, one after the other, each
 # against the target AAP. Started from the job template "Deploy UseCases to
 # AAP"; the first failed workflow stops the job.
 #

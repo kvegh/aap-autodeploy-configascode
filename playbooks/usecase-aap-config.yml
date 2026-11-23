@@ -1,15 +1,25 @@
 ---
-# Apply the AAP configuration of one use case to the target AAP: job
-# templates (with their surveys) and workflows from the use case's aap-config/
-# tree.
-# Third node of the use case's workflow (infra, content, config); the same
-# playbook serves every use case. Nothing is launched.
+# Apply the changes one use case makes to the target AAP itself, from its
+# aap-config/ tree: settings, organizations, teams, local users,
+# authenticators and their maps, OAuth applications, hub collection remotes
+# and EE registries (sync sources and their tokens) and credential types
+# that several use cases share. Second node of the use case's workflow
+# (infra, config, content); the same playbook serves every use case.
 #
-# The projects the job templates use are updated first: the infra part
-# created them (aap-infra/) before their collections were in the hub, and a
-# job template needs its playbook in a synced project.
+# Login: the target AAP's MCP token from the private vault
+# (vaulted_aap_instance_tokens[usecase_target_aap].mcp), also for its hub.
+# The use case tree must not define the login variables.
 #
-# Login, credentials and required variables: as usecase-aap-infra.yml.
+# Credentials: the GitHub read credential of the private repository and its
+# vault credential (it also decrypts the use case vaults).
+#
+# Required variables, from the job template, the workflow and the deployer:
+#   cac_repository, cac_repository_ref, cac_usecase, usecase_catalog_file
+#                          see tasks/usecase-repository-download.yml
+#   usecase_name           use case, from the workflow
+#   usecase_target_aap     target AAP VM name, a key of the vault tokens,
+#                          from the deployer's survey
+# From the catalog: usecase_catalog, usecase_target_aap_fqdn.
 
 - name: Apply the AAP configuration of one use case
   hosts: localhost
@@ -27,23 +37,26 @@
     aap_validate_certs: true
     aap_configuration_secure_logging: true
     aap_configuration_async_dir: /tmp/.ansible_async  # empty default broke async_status ("could not find job") on ansible-core 2.20
+    # Organizations and teams before the users and maps that refer to them.
     aap_configuration_dispatcher_roles:
-      - {role: controller_job_templates, var: controller_templates, tags: job_templates}
-      - {role: controller_workflow_job_templates, var: controller_workflows, tags: workflow_job_templates}
-  module_defaults:
-    group/ansible.controller.controller:
-      aap_hostname: "{{ aap_hostname }}"
-      aap_token: "{{ aap_token }}"
-      aap_validate_certs: "{{ aap_validate_certs }}"
+      - {role: controller_settings, var: controller_settings, tags: settings}
+      - {role: gateway_settings, var: gateway_settings, tags: settings}
+      - {role: gateway_organizations, var: aap_organizations, tags: organizations}
+      - {role: gateway_teams, var: aap_teams, tags: teams}
+      - {role: gateway_users, var: aap_user_accounts, tags: users}
+      - {role: gateway_authenticators, var: gateway_authenticators, tags: authenticators}
+      - {role: gateway_authenticator_maps, var: gateway_authenticator_maps, tags: authenticator_maps}
+      - {role: gateway_applications, var: aap_applications, tags: applications}
+      - {role: hub_collection_remote, var: hub_collection_remotes, tags: collection_remotes}
+      - {role: hub_ee_registry, var: hub_ee_registries, tags: ee_registries}
+      - {role: controller_credential_types, var: controller_credential_types, tags: credential_types}
   tasks:
-    - name: Read the use case tree
-      ansible.builtin.import_tasks: tasks/usecase-tree-read.yml
+    - name: Download the use case repository
+      ansible.builtin.import_tasks: tasks/usecase-repository-download.yml
 
-    - name: Update the projects the use case's job templates use
-      ansible.controller.project_update:
-        name: "{{ item }}"
-        wait: true
-      loop: "{{ controller_templates | default([]) | map(attribute='project') | unique }}"
+    - name: Read the use case's config tree
+      ansible.builtin.include_role:
+        name: infra.aap_configuration_extended.filetree_read
 
     - name: Apply the use case's AAP configuration
       ansible.builtin.include_role:
