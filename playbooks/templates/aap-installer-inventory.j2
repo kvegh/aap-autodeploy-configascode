@@ -52,6 +52,9 @@ gateway_pg_password={{ vaulted_aap_installer.gateway_pg_password }}
 controller_admin_password={{ vaulted_aap_installer.controller_admin_password }}
 controller_pg_host={{ vm_fqdn }}
 controller_pg_password={{ vaulted_aap_installer.controller_pg_password }}
+# Job container podman options; the installer writes them into the
+# controller's settings file, where the API cannot change them.
+controller_extra_settings=[{"setting": "DEFAULT_CONTAINER_RUN_OPTIONS", "value": {{ aap_installer_container_run_options | to_json }}}]
 
 hub_admin_password={{ vaulted_aap_installer.hub_admin_password }}
 hub_pg_host={{ vm_fqdn }}

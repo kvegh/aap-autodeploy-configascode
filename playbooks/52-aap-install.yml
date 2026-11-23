@@ -35,7 +35,8 @@
 #   aap_installer_dir               setup bundle directory in the golden image
 #   aap_installer_timeout           seconds the installer may run
 #   aap_installer_postgresql_admin_username, aap_installer_redis_mode,
-#   aap_installer_hub_seed_collections        installer inventory values
+#   aap_installer_hub_seed_collections,
+#   aap_installer_container_run_options       installer inventory values
 #   autodeploy_ca_cert              shared AutoDeploy CA certificate
 #   aap_nginx_login_zone, aap_nginx_login_rate, aap_nginx_login_burst
 #                                   AAP login rate limit
