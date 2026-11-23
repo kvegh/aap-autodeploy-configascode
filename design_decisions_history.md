@@ -1,5 +1,41 @@
 # Design decisions history
 
+## Task-level no_log on every secret-bearing task — 2026-11-23
+
+User decision (23 November 2026, CET; shared AGENTS.md rule): Ansible content
+run from job templates sets `no_log: true` on every task that carries or could
+print secrets, and keeps all other task output, including debug output and
+errors, visible. Blanket play- or block-level `no_log` is replaced by
+task-level protection; when unsure, a task stays hidden with a one-line
+comment.
+
+Review of every playbook and task file: 14 `no_log` before, all on tasks that
+handle secrets (vault `include_vars`, the convert2rhel and rclone credential
+files, the CA key, the installer inventory, the Gateway token creation, the
+nested infra playbook with the vault password on stdin), so none was removed.
+No play- or block-level `no_log` and no `no_log` toggle variable existed.
+Newly protected, 22 tasks: the six community.hrobot and Robot webservice calls
+of the provider reinstall, the two GoDaddy writes and reads of the DNS stage,
+the GitHub counter read and write, the GitHub vault read and write of the
+platform stage, the seven GitHub, GoDaddy and AAP API calls of the retire job,
+the two `get_url` downloads with a GitHub token, and the rhc role include with
+the activation key (kept hidden as a precaution: the role's own masking was not
+reviewed). 36 `no_log` after; 0 tasks un-hidden.
+
+Agent choices: tasks that reach AAP through `module_defaults` or the AAP
+credential's environment variables stay visible — the password or token is not
+in the task's own arguments, the collections mask it, and the results hold no
+credential. The infra.aap_configuration roles keep their own masking through
+`aap_configuration_secure_logging: true`. The AAP installer run stays visible:
+it reads its secrets from the protected inventory file and its output is the
+only diagnosis of a failed install.
+
+Implementation commit: `20fd656` (v0.3.1). Syntax check passes for every
+changed playbook whose collections are installed locally (ansible-core
+2.16.19); the provider reinstall, platform, base content and use case content
+playbooks need community.hrobot and ansible.controller, which are not
+installed here.
+
 ## Use case infra playbooks live in the public repository — 2026-11-23
 
 User decision (23 November 2026, CET): a use case's -secrets repository holds
