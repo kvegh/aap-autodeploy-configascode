@@ -1,5 +1,42 @@
 # Design decisions history
 
+## Use case deployer on the section rule: infra, config, content — 2026-11-23
+
+User decisions (23 November 2026, CET; bead bead-wd-0gnz.39): `aap-infra/` =
+outside AAP (hosts, VMs, hypervisor, RHEL under AAP, client machines), done by
+the use case's own playbook, run only if the use case declares one;
+`aap-config/` = AAP itself (settings, authentication and maps, hub tokens and
+sync sources, organizations, teams, local users, shared credential types);
+`aap-content/` = what AAP uses (inventories, hosts, groups, credentials,
+projects, collections, EEs, JTs, workflows, schedules, surveys, EDA,
+credential types of one use case). Order infra → config → content. Deploy =
+ready to demonstrate: rulebook activations enabled, no use case JT launched.
+
+Agent choices: the infra node reads the optional catalog key `infra_playbook`
+(a path in the use case's -secrets repository) and runs it with
+`ansible-playbook` and the use case vault, otherwise does nothing; none
+declares one, the playbooks are a separate review (bead-wd-0gnz.45). Hub
+collection remotes are in both AAP nodes: a remote with a token is a sync
+source (config), a remote whose requirements add a use case's collections is
+content. The content node runs three dispatches (hub content and its syncs;
+objects up to projects; JTs, workflows, schedules, EDA) with the JT project
+update between, so trees that create projects with `wait: false` still work.
+`tasks/usecase-tree-read.yml` became `tasks/usecase-repository-download.yml`
+(download only; each AAP node reads its own tree).
+
+Implementation `d26d9d3` (v0.2.0, 06:30 CET), private `e24aed6` (v0.1.5,
+workflow order). Applied to v31 by Job 5415 — JT 213 AutoDeploy-NGNG 70 AAP
+base content config (successful); Job 5413 failed with "Cycle detected" when
+relinking the existing workflow nodes, fixed by deleting the 21 old nodes of
+workflows 12–18 on v31 (one-time; fresh AAPs are not affected). Use case
+re-maps: AIOps `f7faaaa` (v0.2.0, EDA objects and OAuth application added),
+sniper `8b3904a` (v0.17.0), CCNG `fcacb0d` (v0.6.0). On v31, JT 11 Deploy
+UseCases to AAP: Job 58 (AIOps) and Job 65 (sniper, CCNG, Windows, Assistant
+team, Orchestrator) successful; v31 project update 56 had failed on a hub
+artifact hash mismatch, the retry 57 succeeded. Verified: every object of the
+six trees exists, all projects synced, both AIOps activations enabled and
+running; no use case JT launched; nothing written to the private repository.
+Checks: ansible-lint production strict 0/0 on the changed playbooks.
 ## First use cases deployed to v31: AIOps, sniper, CCNG — 2026-11-22
 
 User decisions (22 November 2026, CET): convert AIOps self-healing, RHEL

@@ -296,21 +296,36 @@ The use case deployer (job template "Deploy UseCases to AAP",
 `usecase-deploy.yml`) runs, for each use case chosen in its survey, that use
 case's workflow on the AAP it lives on, passing the target AAP chosen in the
 second survey question (an AAP VM name with tokens in the vault). Each
-workflow has the same three generic nodes, infra → content → config
-(`usecase-aap-infra.yml`, `usecase-aap-content.yml`, `usecase-aap-config.yml`);
+workflow has the same three generic nodes, infra → config → content
+(`usecase-aap-infra.yml`, `usecase-aap-config.yml`, `usecase-aap-content.yml`);
 only the workflow variable `usecase_name` differs. Each node downloads the
 private repository (vault and use case catalog), then the use case's -secrets
 repository with the GitHub token the catalog names (one vault variable per
-repository), loads the repository's vault (`env_variables.yml` at its root),
-reads its own section with `filetree_read` and applies only its own object
-types with `dispatch`, logged in to the target with the target's MCP token.
-Every use case -secrets repository has the same three sections: `aap-infra/`
-(labels, credential types, credentials, inventories, hosts, groups,
-projects), `aap-content/` (hub collections, EEs) and `aap-config/` (job templates with
-surveys, workflows). Content syncs run explicitly (no 50 s limit); config
-updates the projects its job templates use first. Use cases are deployed,
-never launched. Deployed so far: AIOps self-healing, RHEL sniper patching and
-CCNG to v31 (22 November 2026).
+repository) and loads the repository's vault (`env_variables.yml` at its
+root). The sections follow the user's rule of 23 November 2026:
+
+- infra = outside AAP (hosts, VMs, hypervisor, RHEL under AAP, client
+  machines): the node runs the use case's own playbook if its catalog entry
+  declares `infra_playbook` (a path in its -secrets repository, run with the
+  use case vault), otherwise it does nothing. None declares one yet.
+- config = AAP itself, from `aap-config/`: settings, organizations, teams,
+  local users, authenticators and maps, OAuth applications, hub collection
+  remotes and EE registries (sync sources and tokens), credential types that
+  several use cases share.
+- content = what AAP uses with external systems, from `aap-content/`: first
+  hub collection remotes and repositories and EE repositories, synced
+  explicitly (no 50 s limit); then credential types of this use case only,
+  credentials, EEs, labels, inventories, hosts, groups, projects; then the
+  projects the job templates use are updated and job templates (with
+  surveys), workflows, schedules and the EDA objects follow (credentials,
+  projects, event streams, decision environments, rulebook activations).
+
+Both AAP nodes read their section with `filetree_read` and apply it with
+`dispatch`, logged in to the target with the target's MCP token. Deploy
+means ready to demonstrate: rulebook activations are created as their tree
+says (enabled), no job template or workflow of a use case is launched.
+Deployed to v31 (23 November 2026): AIOps self-healing, RHEL sniper patching,
+CCNG, Disconnected Windows, Assistant team, Automation Orchestrator.
 
 The web edge's port-80 catch-all serves `/.well-known/acme-challenge/` from
 the certbot webroot for every name and answers everything else with 444, so

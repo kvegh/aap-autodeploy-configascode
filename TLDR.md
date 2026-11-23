@@ -45,9 +45,11 @@ Workflow "AutoDeploy-NGNG AAP deploy", once per AAP instance (survey
    repositories, default EE, Galaxy and registry credentials, syncs), ending
    with the use case deployer: job template "Deploy UseCases to AAP"
    (`usecase-deploy.yml`) and per use case a workflow of the three generic
-   nodes `usecase-aap-infra/-content/-config.yml`, which read the use case
-   -secrets repository's sections `aap-infra/`, `aap-content/` and
-   `aap-config/`. Nothing of a use case is launched.
+   nodes infra → config → content (`usecase-aap-infra/-config/-content.yml`):
+   infra runs the use case's own playbook for what lies outside AAP, if it
+   declares one; config applies what changes AAP itself (`aap-config/`);
+   content applies what AAP uses (`aap-content/`, incl. EDA, activations
+   enabled). No use case job template is launched.
 
 Parts 3–4 use generic `vm_` variables; the AAP values sit in the CaC.
 
