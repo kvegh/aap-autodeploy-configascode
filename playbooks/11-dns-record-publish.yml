@@ -39,6 +39,7 @@
         timeout: 30
       register: dns_existing
       check_mode: false
+      no_log: true
 
     - name: Create or update the A record when it differs
       ansible.builtin.uri:
@@ -61,6 +62,7 @@
         dns_existing.json['items'] | map(attribute='data') | list != [dns_host_ipv4]
         or dns_existing.json['items'] | map(attribute='ttl') | map('int') | list != [dns_ttl | int]
       changed_when: true
+      no_log: true
 
     # Later stages reach the host by name, so wait for the public answer, not
     # only the provider's. A fresh name can take a while to propagate.

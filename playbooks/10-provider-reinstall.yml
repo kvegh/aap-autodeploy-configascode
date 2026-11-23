@@ -42,6 +42,7 @@
         server_number: "{{ robot_server_number | int }}"
       register: provider_server
       check_mode: false
+      no_log: true
 
     - name: Verify the provider returned the expected ready server
       ansible.builtin.assert:
@@ -97,6 +98,7 @@
       loop_control:
         label: "{{ item.name }}"
       register: provider_keys
+      no_log: true
 
     - name: Collect the registered key fingerprints
       ansible.builtin.set_fact:
@@ -111,6 +113,7 @@
           dist: "{{ robot_install_distribution }}"
           lang: "{{ robot_install_language }}"
           authorized_keys: "{{ provider_key_fingerprints }}"
+      no_log: true
 
     - name: Reset the server into the installer
       community.hrobot.reset:
@@ -118,6 +121,7 @@
         hetzner_password: "{{ robot_password }}"
         server_number: "{{ robot_server_number | int }}"
         reset_type: hardware
+      no_log: true
 
     # The provider installs from its rescue system, which also answers on SSH,
     # so SSH alone cannot tell the installer from the installed system. Wait
@@ -135,6 +139,7 @@
       until: not provider_boot_state.changed
       retries: 60
       delay: 30
+      no_log: true
 
     - name: Wait for the reinstalled server to answer on SSH
       ansible.builtin.wait_for:
@@ -162,6 +167,7 @@
       until: provider_last_install.json.linux.host_key | default([]) | length > 0
       retries: 20
       delay: 15
+      no_log: true
 
     # No Ansible module reads a server's host key without connecting to it.
     # ssh-keyscan and ssh-keygen run on the controller; nothing runs on the

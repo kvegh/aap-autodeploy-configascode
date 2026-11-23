@@ -29,6 +29,7 @@
       X-GitHub-Api-Version: "2022-11-28"
     mode: "0600"
     timeout: 60
+  no_log: true
 
 - name: Unpack the private repository
   ansible.builtin.unarchive:

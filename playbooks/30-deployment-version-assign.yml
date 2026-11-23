@@ -56,6 +56,7 @@
         timeout: 30
       register: counter_file
       check_mode: false
+      no_log: true
 
     - name: Take the number to assign
       ansible.builtin.set_fact:
@@ -104,6 +105,7 @@
         timeout: 30
       changed_when: true
       when: deployment_version | default('', true) == ''
+      no_log: true
 
     # Published only after the write succeeded, so a failed write never hands
     # out a number.

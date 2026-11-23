@@ -112,6 +112,7 @@
               X-GitHub-Api-Version: "2022-11-28"
             timeout: 30
           register: aap_platform_vault_file
+          no_log: true
 
         # Decrypted with the vault password from the vault itself, the key of
         # this AAP added, encrypted again. Comments in the file are lost; the
@@ -141,6 +142,7 @@
                 | b64encode }}
             timeout: 30
           changed_when: true
+          no_log: true
 
     - name: Load the subscription settings of the platform tree
       ansible.builtin.include_vars:

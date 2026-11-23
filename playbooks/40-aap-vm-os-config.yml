@@ -42,6 +42,7 @@
             keys:
               - "{{ rhsm_activation_key }}"
         rhc_organization: "{{ rhsm_org_id }}"
+      no_log: true  # the rhc role receives the activation key; its internal masking was not reviewed here
 
 - name: Update the VM to the latest packages
   ansible.builtin.import_playbook: 14-rhel-update.yml
