@@ -1,5 +1,17 @@
 # Design decisions history
 
+## AutoDeploy private repository as shared storage for use cases — 2026-11-24
+
+User decisions (2026-11-24, CET): no copies of shared values into use case repos
+(user: "I don't like copies"); a use case reads them from the AutoDeploy private
+repository (option B over "the deployer passes only the CA"), and that repository
+is the shared storage (option A over a new shared repo). The infra node passes
+`autodeploy_secrets_dir` (the AutoDeploy private checkout it already downloads)
+to the nested infra playbook; the use case vault password (cac) also opens the
+AutoDeploy vault. First user: the Active Directory use case (AutoDeploy CA signs
+the domain controller's LDAPS certificate). Tradeoff accepted: every use case infra
+playbook can read all AutoDeploy secrets. Commit: see Git log (v0.5.0).
+
 ## Several AAPs on one hypervisor: AAP VMs get DHCP addresses — 2026-11-23
 
 User decisions (19 November 2026, CET; bead bead-wd-0gnz.42): the hypervisor

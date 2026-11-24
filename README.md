@@ -341,8 +341,10 @@ root). The sections follow the user's rule of 23 November 2026:
   configuration from AAP), then runs `infra_playbook` (path from the
   repository root) from that checkout with the use case vault (password from
   a 0600 file in the scratch directory, so the nested output stays visible)
-  and the extra variables `usecase_target_aap` and `usecase_secrets_dir`
-  (the -secrets checkout), with `localhost` as its only inventory host. Declared by: Disconnected Windows.
+  and the extra variables `usecase_target_aap`, `usecase_secrets_dir`
+  (the -secrets checkout) and `autodeploy_secrets_dir` (this repository's
+  private checkout, the shared storage for values several use cases need,
+  e.g. the AutoDeploy CA; its vault opens with the same password), with `localhost` as its only inventory host. Declared by: Disconnected Windows.
 - config = AAP itself, from `aap-config/`: settings, organizations, teams,
   local users, authenticators and maps, OAuth applications, hub collection
   remotes and EE registries (sync sources and tokens), credential types that

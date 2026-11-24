@@ -11,8 +11,10 @@
 # this node does nothing. The playbook runs in this job's execution
 # environment, from the public checkout, with the use case vault (vault ID
 # cac, the private vault's password, from a 0600 file in the scratch
-# directory) and usecase_secrets_dir, the -secrets checkout with its
-# configuration.
+# directory), usecase_secrets_dir, the -secrets checkout with its
+# configuration, and autodeploy_secrets_dir, this AutoDeploy private
+# repository: the shared storage for values several use cases need (for
+# example the AutoDeploy CA in usecases/autodeploy/env_variables.yml).
 #
 # Collections: the nested run sees the collections this job sees (the
 # deployer project's, through the inherited ANSIBLE_COLLECTIONS_PATH). If the
@@ -108,6 +110,10 @@
               - "usecase_target_aap={{ usecase_target_aap }}"
               - --extra-vars
               - "usecase_secrets_dir={{ usecase_scratch.path }}"
+              # The AutoDeploy private repository (its vault opens with the
+              # same cac password), for shared values such as the AutoDeploy CA.
+              - --extra-vars
+              - "autodeploy_secrets_dir={{ cac_scratch.path }}"
               - "{{ usecase.infra_playbook }}"
             chdir: "{{ usecase_public_dir }}"
           changed_when: true
