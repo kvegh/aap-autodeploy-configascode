@@ -10,7 +10,7 @@ is the shared storage (option A over a new shared repo). The infra node passes
 to the nested infra playbook; the use case vault password (cac) also opens the
 AutoDeploy vault. First user: the Active Directory use case (AutoDeploy CA signs
 the domain controller's LDAPS certificate). Tradeoff accepted: every use case infra
-playbook can read all AutoDeploy secrets. Commit: see Git log (v0.5.0).
+playbook can read all AutoDeploy secrets. Commit: `944a138` (v0.5.0).
 
 ## Several AAPs on one hypervisor: AAP VMs get DHCP addresses — 2026-11-23
 
