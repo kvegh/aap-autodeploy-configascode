@@ -1,5 +1,48 @@
 # Design decisions history
 
+## Infra node installs use case collections from the target AAP's hub — 2026-11-24
+
+User decisions (2026-11-24, CET; bead bead-wd-0gnz.45.10): (B) the infra node
+installs the public repository's `collections/requirements.yml` from the
+target AAP's own hub instead of galaxy.ansible.com, with the hub token stage
+60 stores in the vault (`vaulted_aap_instance_tokens[<AAP>].hub`); (2) the use
+case's hub sync (`hub_collection_remote`, `hub_collection_repository`, sync)
+runs in the infra node before the nested infra playbook, so the hub has the
+collections on a first deploy. Before, Disconnected Windows and Active
+Directory runs installed ansible.windows, microsoft.ad and community.crypto
+from Galaxy (bead bead-wd-0gnz.45.8).
+
+Change: the infra node reads the use case's `aap-content/` tree, dispatches
+only the two hub collection roles and syncs the repositories (same code and
+login as the content node, MCP token); then clones the public repository and
+installs with `ANSIBLE_CONFIG` pointing to a 0600 galaxy configuration file
+in the scratch directory: `server_list` = the catalog's
+`usecase_hub_distributions` (private repository v0.4.5: rh-certified,
+validated, community), each `https://<target FQDN>/api/galaxy/content/<distribution>/`
+with the hub token; no other server. The file is removed in `always`, like
+the vault password file.
+
+Agent choices: the token goes through a file, not environment variables
+(at -vvv the local connection logs the environment of the module command)
+and not `no_log` on the install (its errors stay visible); only the file
+write is `no_log`. The content node keeps its hub step: idempotent (a sync
+adds and removes nothing that is already there), and a content-only rerun
+stays complete; removing it would save one sync per remote. TLS verification
+stays on with the system trust: the target's public name has a Let's
+Encrypt certificate on the hypervisor's nginx, as for the AAP nodes. The hub
+step runs whenever the catalog declares `infra_playbook`; without hub
+variables in the tree, dispatch skips the roles and the sync loop is empty;
+without `requirements.yml` the configuration file and install are skipped.
+Use case side unchanged: the Windows and AD hub requirements already list
+every collection their public requirements need beyond the base hub
+(ansible.windows, microsoft.ad in rh-certified; community.windows,
+chocolatey.chocolatey, microsoft.iis, community.crypto in community).
+Checked: syntax check of both use case playbooks in `ee-proj-aap-cac`
+2.0.0 (ansible-core 2.20.10) with ansible.hub 1.1.2 and the CoP collections
+mounted read-only; the rendered configuration makes ansible-galaxy query
+only the three hub URLs. Not yet run against an AAP.
+Commit: `642aa25` (v0.7.0).
+
 ## Deployer applies role definitions and team role assignments — 2026-11-24
 
 User approval (2026-11-24, CET). The use case deployer's config node now also

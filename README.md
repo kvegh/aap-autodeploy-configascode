@@ -334,17 +334,24 @@ root). The sections follow the user's rule of 23 November 2026:
   declares `infra_playbook`, otherwise it does nothing. Playbooks are code
   and live in the use case's public repository; the -secrets repository
   holds only secrets and configuration (user decision 2026-11-23). The node
-  clones the public repository (`infra_repository` at `infra_ref`, no
-  token), installs the collections of its `collections/requirements.yml`
-  that this job does not already have (if the file exists; from
-  ansible-galaxy's default server, as a job gets no galaxy server
-  configuration from AAP), then runs `infra_playbook` (path from the
+  first applies the use case's hub collection remotes and repositories from
+  its `aap-content/` tree and syncs them (as the content node does, which
+  repeats it idempotently), so the target AAP's hub has them on a first
+  deploy; then it clones the public repository (`infra_repository` at
+  `infra_ref`, no token) and, if it has `collections/requirements.yml`,
+  installs the collections this job does not already have from that hub
+  only: the catalog's `usecase_hub_distributions` (rh-certified, validated,
+  community) as the galaxy servers
+  `https://<target>/api/galaxy/content/<distribution>/`, with the target's
+  hub token from the vault in a 0600 galaxy configuration file
+  (`ANSIBLE_CONFIG` of the install only; a job gets no galaxy configuration
+  from AAP and would otherwise use galaxy.ansible.com). Then it runs `infra_playbook` (path from the
   repository root) from that checkout with the use case vault (password from
   a 0600 file in the scratch directory, so the nested output stays visible)
   and the extra variables `usecase_target_aap`, `usecase_secrets_dir`
   (the -secrets checkout) and `autodeploy_secrets_dir` (this repository's
   private checkout, the shared storage for values several use cases need,
-  e.g. the AutoDeploy CA; its vault opens with the same password), with `localhost` as its only inventory host. Declared by: Disconnected Windows.
+  e.g. the AutoDeploy CA; its vault opens with the same password), with `localhost` as its only inventory host. Declared by: Disconnected Windows, Active Directory.
 - config = AAP itself, from `aap-config/`: settings, organizations, teams,
   local users, role definitions, authenticators and maps, OAuth applications, hub collection
   remotes and EE registries (sync sources and tokens), credential types that
