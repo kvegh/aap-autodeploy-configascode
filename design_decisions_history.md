@@ -1,5 +1,15 @@
 # Design decisions history
 
+## Deployer applies role definitions and team role assignments — 2026-11-24
+
+User approval (2026-11-24, CET). The use case deployer's config node now also
+dispatches `gateway_role_definitions` (after the teams) and the content node
+`gateway_role_team_assignments` (after the job templates and workflows they refer
+to). Both roles exist in infra.aap_configuration 4.11.1. Needed by the Active
+Directory use case: without them its 12 teams have no permissions. Use cases
+without these variables are unaffected (dispatch skips undefined variables).
+Commit: see Git log (v0.6.0).
+
 ## AutoDeploy private repository as shared storage for use cases — 2026-11-24
 
 User decisions (2026-11-24, CET): no copies of shared values into use case repos

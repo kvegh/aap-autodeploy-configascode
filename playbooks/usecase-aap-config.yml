@@ -43,6 +43,7 @@
       - {role: gateway_settings, var: gateway_settings, tags: settings}
       - {role: gateway_organizations, var: aap_organizations, tags: organizations}
       - {role: gateway_teams, var: aap_teams, tags: teams}
+      - {role: gateway_role_definitions, var: gateway_role_definitions, tags: role_definitions}
       - {role: gateway_users, var: aap_user_accounts, tags: users}
       - {role: gateway_authenticators, var: gateway_authenticators, tags: authenticators}
       - {role: gateway_authenticator_maps, var: gateway_authenticator_maps, tags: authenticator_maps}

@@ -111,6 +111,8 @@
         aap_configuration_dispatcher_roles:
           - {role: controller_job_templates, var: controller_templates, tags: job_templates}
           - {role: controller_workflow_job_templates, var: controller_workflows, tags: workflow_job_templates}
+          # After the objects the assignments refer to (JTs, projects, inventories).
+          - {role: gateway_role_team_assignments, var: gateway_role_team_assignments, tags: role_team_assignments}
           - {role: controller_schedules, var: controller_schedules, tags: schedules}
           - {role: eda_credentials, var: eda_credentials, tags: eda_credentials}
           - {role: eda_projects, var: eda_projects, tags: eda_projects}
