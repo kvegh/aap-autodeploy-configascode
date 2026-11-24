@@ -346,7 +346,7 @@ root). The sections follow the user's rule of 23 November 2026:
   private checkout, the shared storage for values several use cases need,
   e.g. the AutoDeploy CA; its vault opens with the same password), with `localhost` as its only inventory host. Declared by: Disconnected Windows.
 - config = AAP itself, from `aap-config/`: settings, organizations, teams,
-  local users, authenticators and maps, OAuth applications, hub collection
+  local users, role definitions, authenticators and maps, OAuth applications, hub collection
   remotes and EE registries (sync sources and tokens), credential types that
   several use cases share.
 - content = what AAP uses with external systems, from `aap-content/`: first
@@ -354,7 +354,8 @@ root). The sections follow the user's rule of 23 November 2026:
   explicitly (no 50 s limit); then credential types of this use case only,
   credentials, EEs, labels, inventories, hosts, groups, projects; then the
   projects the job templates use are updated and job templates (with
-  surveys), workflows, schedules and the EDA objects follow (credentials,
+  surveys), workflows, team role assignments, schedules and the EDA objects
+  follow (credentials,
   projects, event streams, decision environments, rulebook activations).
 
 Both AAP nodes read their section with `filetree_read` and apply it with
