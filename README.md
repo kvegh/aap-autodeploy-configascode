@@ -228,7 +228,10 @@ written once by this stage, is where later stages find its address: the VM
 plays connect to it, the VM OS configuration stage writes its `ansible_host`
 into `/etc/hosts` and the installation stage proxies the vhost to
 `hostvars[vm_name].ansible_host`. The nginx login rate limit zone is shared
-by all vhosts. The AAP VM of v32 was created with the fixed MAC of the
+by all vhosts. Known limitation (accepted, user 2026-11-23): DHCP leases expire, so an AAP
+VM that is off longer than its lease could come back with another address if a
+VM took it meanwhile; rerunning the VM creation stage corrects the inventory
+host and the vhost. The AAP VM of v32 was created with the fixed MAC of the
 reservation `aap` in `net_internal.reservations`; that entry stays only until
 v32 is retired.
 
