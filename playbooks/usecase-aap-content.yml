@@ -15,7 +15,10 @@
 # updated (a tree may create them with wait: false) and the job templates,
 # workflows, schedules and EDA objects follow. The syncs run here and not in
 # the CoP sync roles, which stop waiting after about 50 s; the job template's
-# timeout bounds them. A sync adds content and removes none. Use case EEs
+# timeout bounds them. A sync adds content and removes none. The infra node
+# applies and syncs the same collection remotes and repositories before its
+# collection install; repeating it here is idempotent and keeps a
+# content-only rerun complete. Use case EEs
 # come from the deploying AAP's hub through the base's container registry,
 # as the default EE does.
 #

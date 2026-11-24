@@ -19,8 +19,19 @@
 # Collections: the nested run sees the collections this job sees (the
 # deployer project's, through the inherited ANSIBLE_COLLECTIONS_PATH). If the
 # public repository has collections/requirements.yml, what is still missing
-# is installed into a scratch directory first; a job gets no galaxy server
-# configuration from AAP, so that is ansible-galaxy's default server.
+# is installed into a scratch directory first, from the target AAP's own hub
+# only (user decision 2026-11-24): the distributions usecase_hub_distributions
+# of the catalog, in that order, with the target's hub token (a job gets no
+# galaxy server configuration from AAP; without one ansible-galaxy would use
+# galaxy.ansible.com). So that the hub has them on a first deploy, this node
+# first applies the use case's hub collection remotes and repositories from
+# its aap-content/ tree and syncs them, as the content node does (which
+# repeats it: idempotent, and a content-only rerun still syncs). The token
+# goes through a 0600 galaxy configuration file in the scratch directory, so
+# the install itself needs no no_log.
+#
+# Login to the target's hub: its MCP token from the private vault
+# (vaulted_aap_instance_tokens[usecase_target_aap].mcp), as the AAP nodes.
 #
 # Credentials: the GitHub read credential of the private repository and its
 # vault credential (it also decrypts the use case vaults). The public
@@ -31,8 +42,9 @@
 #                          see tasks/usecase-repository-download.yml
 #   usecase_name           use case, from the workflow
 #   usecase_target_aap     target AAP VM name, from the deployer's survey
-# From the catalog: usecase_catalog. From the private vault:
-# vaulted_cac_vault_password.
+# From the catalog: usecase_catalog, usecase_target_aap_fqdn and
+# usecase_hub_distributions. From the private vault:
+# vaulted_cac_vault_password and vaulted_aap_instance_tokens.
 
 - name: Run the infra playbook of one use case
   hosts: localhost
@@ -41,6 +53,20 @@
   become: false
   vars:
     usecase: "{{ usecase_catalog[usecase_name] }}"
+    usecase_tree: "{{ usecase_scratch.path }}/aap-content"
+    dir_orgs_vars: "{{ usecase_tree }}"
+    controller_configuration_filetree_read_layout: create
+    aap_hostname: "https://{{ usecase_target_aap_fqdn }}"
+    aap_token: "{{ vaulted_aap_instance_tokens[usecase_target_aap].mcp }}"
+    hub_token: "{{ aap_token }}"
+    aap_validate_certs: true
+    aap_configuration_secure_logging: true
+    aap_configuration_async_dir: /tmp/.ansible_async  # empty default broke async_status ("could not find job") on ansible-core 2.20
+  module_defaults:
+    group/ansible.hub.hub:
+      aap_hostname: "{{ aap_hostname }}"
+      aap_token: "{{ aap_token }}"
+      validate_certs: "{{ aap_validate_certs }}"
   tasks:
     - name: Download the use case repository
       ansible.builtin.import_tasks: tasks/usecase-repository-download.yml
@@ -63,15 +89,55 @@
           {{ [usecase_public_collections, lookup('ansible.builtin.env', 'ANSIBLE_COLLECTIONS_PATH')]
              | select | join(':') }}
       block:
+        - name: Read the use case's content tree
+          ansible.builtin.include_role:
+            name: infra.aap_configuration_extended.filetree_read
+
+        - name: Apply the use case's hub collection remotes and repositories
+          ansible.builtin.include_role:
+            name: infra.aap_configuration.dispatch
+          vars:
+            aap_configuration_dispatcher_roles:
+              - {role: hub_collection_remote, var: hub_collection_remotes, tags: collection_remotes}
+              - {role: hub_collection_repository, var: hub_collection_repositories, tags: collection_repositories}
+
+        - name: Sync the use case's collection repositories from their remotes
+          ansible.hub.collection_repository_sync:
+            name: "{{ item.name }}"
+            wait: true
+            timeout: "{{ item.timeout | default(omit) }}"
+          loop: "{{ hub_collection_repositories | default([]) | selectattr('remote', 'defined') }}"
+          loop_control:
+            label: "{{ item.name }}"
+
         - name: Clone the public repository at its ref
           ansible.builtin.git:
             repo: "https://github.com/{{ usecase.infra_repository }}.git"
             dest: "{{ usecase_public_dir }}"
             version: "{{ usecase.infra_ref }}"
 
+        # The target AAP's hub distributions as the only galaxy servers.
+        - name: Write the galaxy configuration file
+          ansible.builtin.copy:
+            content: |
+              [galaxy]
+              server_list = {{ usecase_hub_distributions | join(', ') }}
+              {% for distribution in usecase_hub_distributions %}
+
+              [galaxy_server.{{ distribution }}]
+              url = https://{{ usecase_target_aap_fqdn }}/api/galaxy/content/{{ distribution }}/
+              token = {{ vaulted_aap_instance_tokens[usecase_target_aap].hub }}
+              {% endfor %}
+            dest: "{{ usecase_public_scratch.path }}/ansible.cfg"
+            mode: "0600"
+          no_log: true
+          when: (usecase_public_dir ~ '/collections/requirements.yml') is file
+
         # Collections already on the path are skipped, the rest come from
-        # the default galaxy server.
+        # the target AAP's hub.
         - name: Install the public repository's missing collections
+          environment:
+            ANSIBLE_CONFIG: "{{ usecase_public_scratch.path }}/ansible.cfg"
           ansible.builtin.command:
             argv:
               - ansible-galaxy
@@ -118,7 +184,10 @@
             chdir: "{{ usecase_public_dir }}"
           changed_when: true
       always:
-        - name: Remove the vault password file
+        - name: Remove the vault password and galaxy configuration files
           ansible.builtin.file:
-            path: "{{ usecase_public_scratch.path }}/vault-password"
+            path: "{{ usecase_public_scratch.path }}/{{ item }}"
             state: absent
+          loop:
+            - vault-password
+            - ansible.cfg
