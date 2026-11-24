@@ -125,7 +125,8 @@ internal libvirt bridge address on port 22 (the bridge appears with the host
 setup's libvirt network; nonlocal bind also covers boot), the run proves login
 and sudo on the managed port, records it as `ansible_port` on the AAP
 inventory host, then drops the public port 22 and closes it on the public
-zone. The bridge sits in firewalld's libvirt zone, which allows ssh. Every
+zone. The bridge sits in firewalld's libvirt zone, which allows ssh (the
+hypervisor setup's firewall stage later opens that zone fully). Every
 later stage runs as the automation account on the managed port; the conversion is in place
 and keeps it.
 
@@ -138,7 +139,9 @@ The hypervisor setup (`20-hypervisor-setup.yml`) runs eight stages from `playboo
 base (EPEL, names, timezone, admin tools, hardware monitors), virtualization,
 SELinux (permissive), VM storage (the pool directories and the plain image
 directory `/opt/images`, `root:libvirt` 2775), libvirt networks, firewall
-(web ports), the web edge (nginx base, certbot, fail2ban) and tuning. The stage files keep
+(web ports on the public zone; the libvirt zone's reject rule removed, so the
+VMs on the internal libvirt networks reach every hypervisor port, user
+decision 2026-11-25; the public zone is unchanged), the web edge (nginx base, certbot, fail2ban) and tuning. The stage files keep
 their numbers; 06 (users) and 08 (SSH) moved into the host access bootstrap.
 fail2ban never bans our own public addresses. File templates live in the
 public repository; their values come from the private repository's CaC. nginx is installed and configured but neither enabled nor started;

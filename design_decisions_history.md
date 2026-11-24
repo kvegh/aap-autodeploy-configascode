@@ -1,5 +1,28 @@
 # Design decisions history
 
+## Internal libvirt networks trusted: libvirt zone reject rule removed — 2026-11-25
+
+User decision (2026-11-25 ~01:20 CET; bead bead-wd-j639): on the hypervisor,
+remove the internal firewall blocking between the VMs and the hypervisor;
+blocking on the public IP / public interface stays exactly as it is. Reason:
+demo VMs such as Zabbix must reach the hypervisor's nginx and public name
+(before, e.g. 443 from 192.168.42.141 got "connection refused"). This
+supersedes "No firewall rule VM to hypervisor" (2026-11-19).
+
+Change: the firewall stage (`playbooks/hypervisor/07-firewall.yml`, part of
+`20-hypervisor-setup.yml`) removes the rich rule `rule priority="32767"
+reject` from the libvirt zone with `ansible.posix.firewalld` (already a
+collection dependency), permanent and immediate. The public zone task is
+unchanged.
+
+Agent choice: the requested change was `target: ACCEPT` on the libvirt zone,
+but the live zone (libvirt's shipped `/usr/lib/firewalld/zones/libvirt.xml`)
+already has target ACCEPT, which only governs forwarding; its lowest-priority
+reject rule is what blocks traffic to the host. Setting the target would have
+changed nothing, so the rule is removed instead (same effect as the user's
+decision, one native task, no handler: `immediate` applies it at runtime).
+Checked: syntax check with ansible.posix 2.2.2 in `aap-autodeploy-ee-v1`.
+
 ## Infra node installs use case collections from the target AAP's hub — 2026-11-24
 
 User decisions (2026-11-24, CET; bead bead-wd-0gnz.45.10): (B) the infra node

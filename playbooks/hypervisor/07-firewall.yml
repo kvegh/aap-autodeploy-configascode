@@ -1,9 +1,11 @@
 ---
-# firewalld: web ports.
+# firewalld: web ports, trusted internal libvirt networks.
 #
 # The host access bootstrap already runs firewalld, binds the public interface
 # to the public zone, opens the managed SSH port and closes port 22 there.
-# This stage adds the web ports.
+# This stage adds the web ports and removes the reject rule of the libvirt
+# zone (the internal libvirt bridges), so the VMs reach every hypervisor port
+# (user decision 2026-11-25). The public zone keeps its rules.
 #
 # The role adds the listed rules; it does not remove rules dropped from this
 # list. Handling removals in CaC is a separate project to-do.
@@ -25,3 +27,16 @@
             state: enabled
             permanent: true
             runtime: true
+
+    # The internal libvirt networks are trusted (user decision 2026-11-25):
+    # VMs such as Zabbix must reach the hypervisor's nginx and public name.
+    # libvirt's zone already has target ACCEPT; its lowest-priority reject
+    # rule is what blocks traffic to the host, so it is removed. The public
+    # zone is unchanged.
+    - name: Accept all traffic from the internal libvirt networks
+      ansible.posix.firewalld:
+        zone: libvirt
+        rich_rule: rule priority="32767" reject
+        permanent: true
+        immediate: true
+        state: disabled
