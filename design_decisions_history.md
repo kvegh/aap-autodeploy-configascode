@@ -22,6 +22,16 @@ reject rule is what blocks traffic to the host. Setting the target would have
 changed nothing, so the rule is removed instead (same effect as the user's
 decision, one native task, no handler: `immediate` applies it at runtime).
 Checked: syntax check with ansible.posix 2.2.2 in `aap-autodeploy-ee-v1`.
+Commit: `2d58276` (v0.7.1).
+
+Applied live on the test hypervisor (2026-11-25 ~00:55 CET, v32 ad hoc
+commands, inventory host `hypervisor`): `--permanent --remove-rich-rule`, then
+`firewall-cmd --reload`. Libvirt zone after: target ACCEPT, no rich rule; the
+nft chain `filter_IN_libvirt` ends in accept. Finding: the reload dropped
+fail2ban's runtime ban rule in the public zone (fail2ban still listed the
+address as banned); the agent re-added the identical runtime rule, so the
+public zone matches its earlier state. That is why the task uses `immediate`
+and no reload handler. Production hactar not changed.
 
 ## Infra node installs use case collections from the target AAP's hub — 2026-11-24
 
